@@ -2,10 +2,9 @@
 
 import datetime
 
-from pysgn.small_world_network import get_nearest_nodes, small_world_network
+from pysgn.small_world_network import small_world_network
 
 __all__ = [
-    "get_nearest_nodes",
     "small_world_network",
 ]
 

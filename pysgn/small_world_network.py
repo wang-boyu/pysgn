@@ -1,6 +1,7 @@
 import random as rd
 import warnings
 from collections import defaultdict
+from collections.abc import Callable
 
 import geopandas as gpd
 import networkx as nx
@@ -28,8 +29,10 @@ def _find_scaling_factor(gdf) -> float:
 def _get_nearest_nodes(
     gdf: gpd.GeoDataFrame,
     k: int | str,
+    *,
     max_degree: int,
     query_factor: int = 2,
+    constraint: Callable | None = None,
 ) -> tuple[dict[int, list[int]], np.ndarray]:
     """
     Find the nearest neighbors for each agent
@@ -41,6 +44,9 @@ def _get_nearest_nodes(
                        If a string, it determines the column name containing expected degree centrality for each node, when connecting to neighbors initially.
         max_degree (int): maximum degree centrality allowed
         query_factor (int): factor of k to query neighbors initially to handle constraint filtering
+        constraint (Callable | None): constraint function to filter out invalid neighbors, default is None
+                                      Example: constraint=lambda u, v: u.household != v.household
+                                      This will ensure that agents from the same household are not connected.
 
     Returns:
         dict[int, list[int]]: dictionary of nearest neighbors for each agent
@@ -107,6 +113,11 @@ def _get_nearest_nodes(
                     continue
                 # Avoid double counting neighbors
                 if this_node_idx in nearest_neighbors[new_node_idx]:
+                    continue
+                # Apply constraint if provided
+                if constraint is not None and not constraint(
+                    gdf.iloc[this_node_idx], gdf.iloc[new_node_idx]
+                ):
                     continue
 
                 neighbors_set.add(new_node_idx)
@@ -186,6 +197,7 @@ def small_world_network(
     id_col: str | None = "index",
     query_factor: int = 2,
     save_attributes: bool | str | list[str] = True,
+    constraint: Callable | None = None,
 ) -> nx.Graph:
     """Construct a small world network using the Geospatial Watts-Strogatz model
 
@@ -211,6 +223,9 @@ def small_world_network(
                                                   If True, all attributes will be saved as node attributes.
                                                   If False, only the position of the nodes will be saved as a `pos` attribute.
                                                   If a string or a list of strings, the attributes will be saved as node attributes.
+        constraint (Callable | None): constraint function to filter out invalid neighbors, default is None
+                                      Example: constraint=lambda u, v: u.household != v.household
+                                      This will ensure that agents from the same household are not connected.
 
     Returns:
         nx.Graph: small world network graph with average degree k, maximum degree max_degree
@@ -229,11 +244,19 @@ def small_world_network(
         )
     if isinstance(k, str):
         nearest_neighbors, degree_centrality_array = _get_nearest_nodes(
-            gdf, k, max_degree=max_degree, query_factor=query_factor
+            gdf,
+            k,
+            max_degree=max_degree,
+            query_factor=query_factor,
+            constraint=constraint,
         )
     elif isinstance(k, int):
         nearest_neighbors, degree_centrality_array = _get_nearest_nodes(
-            gdf, k // 2, max_degree=max_degree, query_factor=query_factor
+            gdf,
+            max(1, k // 2),
+            max_degree=max_degree,
+            query_factor=query_factor,
+            constraint=constraint,
         )
     else:
         raise ValueError("k must be an integer or a string")
@@ -297,11 +320,18 @@ def small_world_network(
                     random_node_graph_id = (
                         id_col_array[random_node_idx] if id_col else random_node_idx
                     )
+                    # Enforce no self-loops, or multiple edges, or degree >= max_degree, or constraint
                     while (
                         random_node_idx == this_node_idx
                         or graph.has_edge(this_node_graph_id, random_node_graph_id)
                         or degree_centrality_array[random_node_idx] >= max_degree
-                    ):  # Enforce no self-loops, or multiple edges, or degree >= max_degree
+                        or (
+                            constraint is not None
+                            and not constraint(
+                                gdf.iloc[this_node_idx], gdf.iloc[random_node_idx]
+                            )
+                        )
+                    ):
                         random_node_idx = rd.randint(0, len(gdf) - 1)
                         random_node_graph_id = (
                             id_col_array[random_node_idx] if id_col else random_node_idx
