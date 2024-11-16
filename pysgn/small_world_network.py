@@ -27,7 +27,7 @@ def _find_scaling_factor(gdf) -> float:
 
 def _get_nearest_nodes(
     gdf: gpd.GeoDataFrame,
-    k: int,
+    k: int | str,
     max_degree: int,
     query_factor: int = 2,
 ) -> tuple[dict[int, list[int]], np.ndarray]:
@@ -36,7 +36,9 @@ def _get_nearest_nodes(
 
     Args:
         gdf (gpd.GeoDataFrame): GeoDataFrame containing agents
-        k (int): number of nearest neighbors to find
+        k (int | str): number of nearest neighbors to connect initially
+                       If a number, it determines the number of nearest neighbors to connect initially, also the average degree of the network.
+                       If a string, it determines the column name containing expected degree centrality for each node, when connecting to neighbors initially.
         max_degree (int): maximum degree centrality allowed
         query_factor (int): factor of k to query neighbors initially to handle constraint filtering
 
@@ -48,17 +50,24 @@ def _get_nearest_nodes(
     # manipulate numpy arrays directly for faster performance
     # instead of using the .iloc method in pandas
     degree_centrality_array = np.zeros(len(gdf))
+    if isinstance(k, str):
+        k_col = gdf[k].values // 2
+        k_col = np.clip(k_col, 1, max_degree)
 
     # Step 1: Create a KDTree for fast neighbor lookups
     positions = np.stack([gdf.geometry.x, gdf.geometry.y], axis=1)
     kdtree = KDTree(positions, metric="euclidean")
 
     nearest_neighbors = defaultdict(list)
-    desc = f"Finding {k} nearest neighbors"
+    desc = (
+        f"Finding {k} nearest neighbors"
+        if isinstance(k, int)
+        else f"Finding nearest neighbors based on column {k}"
+    )
 
     # Step 2: Find nearest neighbors using KDTree queries with constraint handling
-    expected_num_neighbors = k
     for this_node_idx in tqdm(range(len(gdf)), desc=desc):
+        expected_num_neighbors = k if isinstance(k, int) else k_col[this_node_idx]
         if expected_num_neighbors > max_degree:
             logger.error(
                 f"Agent {this_node_idx} has expected degree {expected_num_neighbors} > max degree {max_degree}. Skipping agent."
@@ -87,9 +96,12 @@ def _get_nearest_nodes(
                 if degree_centrality_array[this_node_idx] >= max_degree:
                     continue
                 # Avoid agents with degree centrality >= max_degree
-                expected_num_neighbors_of_n = k
+                expected_num_neighbors_of_new_node = (
+                    k if isinstance(k, int) else k_col[new_node_idx]
+                )
                 if (
-                    degree_centrality_array[new_node_idx] + expected_num_neighbors_of_n
+                    degree_centrality_array[new_node_idx]
+                    + expected_num_neighbors_of_new_node
                     >= max_degree
                 ):
                     continue
@@ -165,7 +177,7 @@ def _set_node_attributes(graph, gdf, id_col, save_attributes):
 
 def small_world_network(
     gdf,
-    k,
+    k: int | str,
     p,
     *,
     a=3,
@@ -179,7 +191,9 @@ def small_world_network(
 
     Args:
         gdf (gpd.GeoDataFrame): GeoDataFrame containing agents
-        k (int): number of nearest neighbors to connect initially, also the average degree of the network
+        k (int | str): number of nearest neighbors to connect initially
+                       If a number, it determines the number of nearest neighbors to connect initially, also the average degree of the network.
+                       If a string, it determines the column name containing expected degree centrality for each node, when connecting to neighbors initially.
         p (float): probability of rewiring an edge
     Keyword Args:
         a (int): distance decay exponent parameter, default is 3
@@ -213,9 +227,16 @@ def small_world_network(
             UserWarning,
             stacklevel=2,
         )
-    nearest_neighbors, degree_centrality_array = _get_nearest_nodes(
-        gdf, k // 2, max_degree=max_degree, query_factor=query_factor
-    )
+    if isinstance(k, str):
+        nearest_neighbors, degree_centrality_array = _get_nearest_nodes(
+            gdf, k, max_degree=max_degree, query_factor=query_factor
+        )
+    elif isinstance(k, int):
+        nearest_neighbors, degree_centrality_array = _get_nearest_nodes(
+            gdf, k // 2, max_degree=max_degree, query_factor=query_factor
+        )
+    else:
+        raise ValueError("k must be an integer or a string")
     rewire_count = 0
     graph = nx.Graph()
     if id_col is not None:
