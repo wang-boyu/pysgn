@@ -1,0 +1,41 @@
+# Codecov configuration file
+# See: https://docs.codecov.io/docs/codecovyml-reference
+
+coverage:
+  status:
+    project:
+      default:
+        # Target minimum coverage ratio for the entire project
+        target: 80%
+        # Allow coverage to drop by up to 2% while still succeeding
+        threshold: 2%
+
+    patch:
+      default:
+        # Target coverage ratio for new/modified code
+        target: 80%
+        # Only check coverage on files changed in the PR
+        only_pulls: true
+
+  # Don't mark the build as failing if coverage drops in non-PR builds
+  require_ci_to_pass: false
+
+# Ignore test files and virtual environments
+ignore:
+  - "tests/**/*"
+  - "venv/**/*"
+  - ".venv/**/*"
+
+# Configuration for PR comments
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: true  # Only post comment if coverage changes
+  require_base: false
+  require_head: true
+
+# Report coverage even if builds are failing
+codecov:
+  require_ci_to_pass: false
+  notify:
+    after_n_builds: 1

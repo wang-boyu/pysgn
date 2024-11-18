@@ -6,6 +6,7 @@ from collections.abc import Callable
 import geopandas as gpd
 import networkx as nx
 import numpy as np
+import pandas as pd
 from loguru import logger
 from sklearn.neighbors import KDTree
 from tqdm.auto import tqdm
@@ -53,16 +54,19 @@ def _get_nearest_nodes(
         np.ndarray: array of degree centrality for each agent
     """
     logger.info("Building KDTree for efficient nearest neighbor search")
-    # manipulate numpy arrays directly for faster performance
-    # instead of using the .iloc method in pandas
     degree_centrality_array = np.zeros(len(gdf))
     if isinstance(k, str):
         k_col = gdf[k].values // 2
         k_col = np.clip(k_col, 1, max_degree)
 
-    # Step 1: Create a KDTree for fast neighbor lookups
-    positions = np.stack([gdf.geometry.x, gdf.geometry.y], axis=1)
+    # Get positions from either points or polygon centroids
+    if gdf.geometry.geom_type[0] == "Polygon":
+        positions = np.stack([gdf.geometry.centroid.x, gdf.geometry.centroid.y], axis=1)
+    else:
+        positions = np.stack([gdf.geometry.x, gdf.geometry.y], axis=1)
+
     kdtree = KDTree(positions, metric="euclidean")
+    logger.info(f"Number of training points: {kdtree.data.shape}")
 
     nearest_neighbors = defaultdict(list)
     desc = (
@@ -86,9 +90,15 @@ def _get_nearest_nodes(
             continue
         neighbors_set = set()  # Track neighbors in a set to avoid duplicates
         # Initially query more neighbors to account for filtering
-        query_k = expected_num_neighbors * query_factor
+        query_k = min(expected_num_neighbors * query_factor, len(gdf) - 1)
         while len(neighbors_set) < expected_num_neighbors:
             # Query KDTree for the next batch of neighbors
+            logger.info(
+                f"Querying {query_k + 1} neighbors for agent {this_node_idx} with expected degree {expected_num_neighbors}"
+            )
+            logger.info(
+                f"Current degree centrality: {degree_centrality_array[this_node_idx]}"
+            )
             _, idxs = kdtree.query(
                 [positions[this_node_idx]], k=query_k + 1
             )  # +1 to avoid self-loop
@@ -128,11 +138,21 @@ def _get_nearest_nodes(
                 if len(neighbors_set) >= expected_num_neighbors:
                     break
 
+            # If we've reached all nodes, break the loop
+            logger.info(f"len(gdf) - 1: {len(gdf) - 1}")
+            if query_k == len(gdf) - 1:
+                if len(neighbors_set) < expected_num_neighbors:
+                    warnings.warn(
+                        f"Node at index {this_node_idx} has only {len(neighbors_set)} neighbors out of expected {expected_num_neighbors}. "
+                        f"Consider reducing the expected degree for this node:\n{gdf.iloc[this_node_idx].to_frame().T}",
+                        stacklevel=2,
+                    )
+                break
+
             # If we still don't have enough neighbors, increase query size and try again
             if len(neighbors_set) < expected_num_neighbors:
-                query_k += (
-                    expected_num_neighbors  # Increase the number of neighbors to query
-                )
+                # Increase query size to find more neighbors
+                query_k = min(query_k + query_factor, len(gdf) - 1)
 
         # Step 3: Assign the valid neighbors and update degree centrality
         nearest_neighbors[this_node_idx] = list(neighbors_set)
@@ -189,12 +209,12 @@ def _set_node_attributes(graph, gdf, id_col, save_attributes):
 def small_world_network(
     gdf,
     k: int | str,
-    p,
+    p: float,
     *,
     a=3,
     scaling_factor: float | None = None,
     max_degree=150,
-    id_col: str | None = "index",
+    id_col: str | None = None,
     query_factor: int = 2,
     save_attributes: bool | str | list[str] = True,
     constraint: Callable | None = None,
@@ -214,7 +234,7 @@ def small_world_network(
                                 if an edge is chosen to be rewired.
                                 If None, the scaling factor will be calculated based on the bounding box of the GeoDataFrame.
         max_degree (int): maximum degree centrality allowed, default is 150
-        id_col (str): column name containing unique IDs, default is "index".
+        id_col (str): column name containing unique IDs, default is None.
                       If "index", the index of the GeoDataFrame will be used as the unique ID.
                       If a column name, the values in the column will be used as the unique ID.
                       If None, the positional index of the agent will be used as the unique ID.
@@ -242,6 +262,16 @@ def small_world_network(
             UserWarning,
             stacklevel=2,
         )
+    if not isinstance(k, int | str):
+        raise ValueError("k must be an integer or a string")
+    if not 0 <= p <= 1:
+        raise ValueError("p must be between 0 and 1")
+    if id_col is not None:
+        if id_col == "index" and isinstance(gdf.index, pd.MultiIndex):
+            raise ValueError("Multi-index is not supported")
+        id_col_array = gdf.index.values if id_col == "index" else gdf[id_col].values
+        if len(np.unique(id_col_array)) != len(id_col_array):
+            raise ValueError("ID column must contain unique values")
     if isinstance(k, str):
         nearest_neighbors, degree_centrality_array = _get_nearest_nodes(
             gdf,
@@ -262,10 +292,6 @@ def small_world_network(
         raise ValueError("k must be an integer or a string")
     rewire_count = 0
     graph = nx.Graph()
-    if id_col is not None:
-        id_col_array = gdf.index.values if id_col == "index" else gdf[id_col].values
-        if len(np.unique(id_col_array)) != len(id_col_array):
-            raise RuntimeError("ID column must contain unique values")
     # use centroid if geometry is a polygon
     if gdf.geometry.geom_type[0] == "Polygon":
         pos_x_array = gdf.geometry.centroid.x.values
@@ -320,6 +346,7 @@ def small_world_network(
                     random_node_graph_id = (
                         id_col_array[random_node_idx] if id_col else random_node_idx
                     )
+                    checked_nodes = {random_node_idx}
                     # Enforce no self-loops, or multiple edges, or degree >= max_degree, or constraint
                     while (
                         random_node_idx == this_node_idx
@@ -336,7 +363,16 @@ def small_world_network(
                         random_node_graph_id = (
                             id_col_array[random_node_idx] if id_col else random_node_idx
                         )
+                        checked_nodes.add(random_node_idx)
+                        if len(checked_nodes) == len(gdf):
+                            break
 
+                    if len(checked_nodes) == len(gdf):
+                        logger.warning(
+                            f"Node {this_node_graph_id} has exhausted all possible rewiring options. Skipping."
+                            f"Consider reducing the constraints for this node:\n{gdf.iloc[this_node_idx].to_frame().T}"
+                        )
+                        break
                     distance = (
                         float(pos_x_array[this_node_idx] - pos_x_array[random_node_idx])
                         ** 2

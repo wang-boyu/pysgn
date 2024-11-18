@@ -19,6 +19,7 @@ dependencies = [
     "scikit-learn",
     "scipy",
     "loguru",
+    "tqdm",
 ]
 dynamic = ["version"]
 
@@ -42,7 +43,6 @@ docs = [
   "myst_nb",
   "myst-parser",         # Markdown in Sphinx
   "ipywidgets",
-  "tqdm",
   "matplotlib",
   "contextily",
   "jupyterlab",
