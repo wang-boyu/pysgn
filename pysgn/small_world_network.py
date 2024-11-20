@@ -1,4 +1,5 @@
 import random as rd
+import sys
 import warnings
 from collections import defaultdict
 from collections.abc import Callable
@@ -13,7 +14,7 @@ from tqdm.auto import tqdm
 
 
 def _find_scaling_factor(gdf) -> float:
-    logger.info("Finding scaling factor")
+    logger.debug("Finding scaling factor")
     min_x, min_y, max_x, max_y = gdf.geometry.total_bounds
     # calculate the distance between the two corners of the bounding box
     dist = ((max_x - min_x) ** 2 + (max_y - min_y) ** 2) ** 0.5
@@ -21,7 +22,7 @@ def _find_scaling_factor(gdf) -> float:
     # distances less than this will have a probability of 1 to be connected if chosen
     # distances greater than this will have a probability of (distance / min_dist) ^ (-a) to be connected if chosen
     min_dist = dist / 20
-    logger.info(
+    logger.debug(
         f"Scaling factor: {1 / min_dist:.10f}, Minimum distance: {min_dist:.2f}, Bounding box diagonal: {dist:.2f}"
     )
     return 1 / min_dist
@@ -34,12 +35,13 @@ def _get_nearest_nodes(
     max_degree: int,
     query_factor: int = 2,
     constraint: Callable | None = None,
+    verbose: bool = False,
 ) -> tuple[dict[int, list[int]], np.ndarray]:
     """
-    Find the nearest neighbors for each agent
+    Find the nearest neighbors for each node
 
     Args:
-        gdf (gpd.GeoDataFrame): GeoDataFrame containing agents
+        gdf (gpd.GeoDataFrame): GeoDataFrame containing nodes
         k (int | str): number of nearest neighbors to connect initially
                        If a number, it determines the number of nearest neighbors to connect initially, also the average degree of the network.
                        If a string, it determines the column name containing expected degree centrality for each node, when connecting to neighbors initially.
@@ -47,13 +49,14 @@ def _get_nearest_nodes(
         query_factor (int): factor of k to query neighbors initially to handle constraint filtering
         constraint (Callable | None): constraint function to filter out invalid neighbors, default is None
                                       Example: constraint=lambda u, v: u.household != v.household
-                                      This will ensure that agents from the same household are not connected.
+                                      This will ensure that nodes from the same household are not connected.
+        verbose (bool): whether to show detailed progress messages, default is False
 
     Returns:
-        dict[int, list[int]]: dictionary of nearest neighbors for each agent
-        np.ndarray: array of degree centrality for each agent
+        dict[int, list[int]]: dictionary of nearest neighbors for each node
+        np.ndarray: array of degree centrality for each node
     """
-    logger.info("Building KDTree for efficient nearest neighbor search")
+    logger.debug("Building KDTree for efficient nearest neighbor search")
     degree_centrality_array = np.zeros(len(gdf))
     if isinstance(k, str):
         k_col = gdf[k].values // 2
@@ -66,7 +69,6 @@ def _get_nearest_nodes(
         positions = np.stack([gdf.geometry.x, gdf.geometry.y], axis=1)
 
     kdtree = KDTree(positions, metric="euclidean")
-    logger.info(f"Number of training points: {kdtree.data.shape}")
 
     nearest_neighbors = defaultdict(list)
     desc = (
@@ -76,16 +78,16 @@ def _get_nearest_nodes(
     )
 
     # Step 2: Find nearest neighbors using KDTree queries with constraint handling
-    for this_node_idx in tqdm(range(len(gdf)), desc=desc):
+    for this_node_idx in tqdm(range(len(gdf)), desc=desc, disable=not verbose):
         expected_num_neighbors = k if isinstance(k, int) else k_col[this_node_idx]
         if expected_num_neighbors > max_degree:
             logger.error(
-                f"Agent {this_node_idx} has expected degree {expected_num_neighbors} > max degree {max_degree}. Skipping agent."
+                f"Node {this_node_idx} has expected degree {expected_num_neighbors} > max degree {max_degree}. Skipping node."
             )
             continue
         if expected_num_neighbors > len(gdf):
             logger.error(
-                f"Agent {this_node_idx} has expected degree {expected_num_neighbors} > number of agents {len(gdf)}. Skipping agent."
+                f"Node {this_node_idx} has expected degree {expected_num_neighbors} > number of nodes {len(gdf)}. Skipping node."
             )
             continue
         neighbors_set = set()  # Track neighbors in a set to avoid duplicates
@@ -93,25 +95,19 @@ def _get_nearest_nodes(
         query_k = min(expected_num_neighbors * query_factor, len(gdf) - 1)
         while len(neighbors_set) < expected_num_neighbors:
             # Query KDTree for the next batch of neighbors
-            logger.info(
-                f"Querying {query_k + 1} neighbors for agent {this_node_idx} with expected degree {expected_num_neighbors}"
-            )
-            logger.info(
-                f"Current degree centrality: {degree_centrality_array[this_node_idx]}"
-            )
             _, idxs = kdtree.query(
                 [positions[this_node_idx]], k=query_k + 1
             )  # +1 to avoid self-loop
 
             for new_node_idx in idxs[0]:
-                if new_node_idx == this_node_idx:  # Skip the agent itself
+                if new_node_idx == this_node_idx:  # Skip the node itself
                     continue
                 if new_node_idx in neighbors_set:  # Skip if already added
                     continue
-                # Avoid agents with degree centrality >= max_degree
+                # Avoid nodes with degree centrality >= max_degree
                 if degree_centrality_array[this_node_idx] >= max_degree:
                     continue
-                # Avoid agents with degree centrality >= max_degree
+                # Avoid nodes with degree centrality >= max_degree
                 expected_num_neighbors_of_new_node = (
                     k if isinstance(k, int) else k_col[new_node_idx]
                 )
@@ -139,12 +135,12 @@ def _get_nearest_nodes(
                     break
 
             # If we've reached all nodes, break the loop
-            logger.info(f"len(gdf) - 1: {len(gdf) - 1}")
             if query_k == len(gdf) - 1:
                 if len(neighbors_set) < expected_num_neighbors:
                     warnings.warn(
                         f"Node at index {this_node_idx} has only {len(neighbors_set)} neighbors out of expected {expected_num_neighbors}. "
                         f"Consider reducing the expected degree for this node:\n{gdf.iloc[this_node_idx].to_frame().T}",
+                        UserWarning,
                         stacklevel=2,
                     )
                 break
@@ -218,26 +214,27 @@ def small_world_network(
     query_factor: int = 2,
     save_attributes: bool | str | list[str] = True,
     constraint: Callable | None = None,
+    verbose: bool = False,
 ) -> nx.Graph:
     """Construct a small world network using the Geospatial Watts-Strogatz model
 
     Args:
-        gdf (gpd.GeoDataFrame): GeoDataFrame containing agents
+        gdf (gpd.GeoDataFrame): GeoDataFrame containing nodes
         k (int | str): number of nearest neighbors to connect initially
                        If a number, it determines the number of nearest neighbors to connect initially, also the average degree of the network.
                        If a string, it determines the column name containing expected degree centrality for each node, when connecting to neighbors initially.
         p (float): probability of rewiring an edge
     Keyword Args:
         a (int): distance decay exponent parameter, default is 3
-        scaling_factor (float): scaling factor is the inverse of the minimum distance between agents, default is None.
-                                The minimum distance is a threshold, below which agents are connected with probability 1,
+        scaling_factor (float): scaling factor is the inverse of the minimum distance between nodes, default is None.
+                                The minimum distance is a threshold, below which nodes are connected with probability 1,
                                 if an edge is chosen to be rewired.
                                 If None, the scaling factor will be calculated based on the bounding box of the GeoDataFrame.
         max_degree (int): maximum degree centrality allowed, default is 150
         id_col (str): column name containing unique IDs, default is None.
                       If "index", the index of the GeoDataFrame will be used as the unique ID.
                       If a column name, the values in the column will be used as the unique ID.
-                      If None, the positional index of the agent will be used as the unique ID.
+                      If None, the positional index of the node will be used as the unique ID.
         query_factor (int): factor of k to query neighbors initially to handle constraint filtering, default is 2
         save_attributes (bool | str | list[str]): attributes to save in the graph, default is True.
                                                   If True, all attributes will be saved as node attributes.
@@ -245,13 +242,17 @@ def small_world_network(
                                                   If a string or a list of strings, the attributes will be saved as node attributes.
         constraint (Callable | None): constraint function to filter out invalid neighbors, default is None
                                       Example: constraint=lambda u, v: u.household != v.household
-                                      This will ensure that agents from the same household are not connected.
+                                      This will ensure that nodes from the same household are not connected.
+        verbose (bool): whether to show detailed progress messages, default is False
 
     Returns:
         nx.Graph: small world network graph with average degree k, maximum degree max_degree
     """
-    logger.info(
-        f"Building small world network with k={k}, p={p}, a={a}, max_degree={max_degree}"
+    # Set logger level based on verbose flag
+    logger.remove()
+    logger.add(sys.stderr, level="DEBUG" if verbose else "WARNING")
+    logger.debug(
+        f"Building small world network with k={k}, p={p}, a={a}, scaling_factor={scaling_factor}, max_degree={max_degree}"
     )
     if gdf.crs and gdf.crs.is_geographic:
         warnings.warn(
@@ -279,6 +280,7 @@ def small_world_network(
             max_degree=max_degree,
             query_factor=query_factor,
             constraint=constraint,
+            verbose=verbose,
         )
     elif isinstance(k, int):
         nearest_neighbors, degree_centrality_array = _get_nearest_nodes(
@@ -287,6 +289,7 @@ def small_world_network(
             max_degree=max_degree,
             query_factor=query_factor,
             constraint=constraint,
+            verbose=verbose,
         )
     else:
         raise ValueError("k must be an integer or a string")
@@ -300,7 +303,9 @@ def small_world_network(
         pos_x_array = gdf.geometry.x.values
         pos_y_array = gdf.geometry.y.values
     for this_node_idx in tqdm(
-        nearest_neighbors, desc="Creating initial network from nearest neighbors"
+        nearest_neighbors,
+        desc="Creating initial network from nearest neighbors",
+        disable=not verbose,
     ):
         for neighboring_node_idx in nearest_neighbors[this_node_idx]:
             distance = (
@@ -329,7 +334,9 @@ def small_world_network(
     # loop over all nodes in order (label) and neighbors in order (distance)
     # no self loops or multiple edges allowed
     for this_node_idx in tqdm(
-        nearest_neighbors, desc="Rewiring edges in small world network"
+        nearest_neighbors,
+        desc="Rewiring edges in small world network",
+        disable=not verbose,
     ):
         for neighboring_node_idx in nearest_neighbors[this_node_idx]:
             this_node_graph_id = (
@@ -368,9 +375,11 @@ def small_world_network(
                             break
 
                     if len(checked_nodes) == len(gdf):
-                        logger.warning(
+                        warnings.warn(
                             f"Node {this_node_graph_id} has exhausted all possible rewiring options. Skipping."
-                            f"Consider reducing the constraints for this node:\n{gdf.iloc[this_node_idx].to_frame().T}"
+                            f"Consider reducing the constraints for this node:\n{gdf.iloc[this_node_idx].to_frame().T}",
+                            UserWarning,
+                            stacklevel=2,
                         )
                         break
                     distance = (
@@ -404,7 +413,7 @@ def small_world_network(
                         chosen = True
     _set_node_attributes(graph, gdf, id_col, save_attributes)
     total_edges = graph.number_of_edges()
-    logger.info(
+    logger.debug(
         f"Rewire Count: {rewire_count:,} edges out of {total_edges:,}. {rewire_count / total_edges * 100:.2f}% of edges rewired"
     )
     return graph
