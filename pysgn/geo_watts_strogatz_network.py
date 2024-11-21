@@ -156,25 +156,25 @@ def _get_nearest_nodes(
     return nearest_neighbors, degree_centrality_array
 
 
-def _set_node_attributes(graph, gdf, id_col, save_attributes):
+def _set_node_attributes(graph, gdf, id_col, node_attributes):
     if gdf.geometry.geom_type[0] == "Polygon":
         pos_x_array = gdf.geometry.centroid.x.values
         pos_y_array = gdf.geometry.centroid.y.values
     else:
         pos_x_array = gdf.geometry.x.values
         pos_y_array = gdf.geometry.y.values
-    if save_attributes is True:
-        save_attributes = gdf.columns.tolist()
-    if isinstance(save_attributes, str):
-        save_attributes = [save_attributes]
+    if node_attributes is True:
+        node_attributes = gdf.columns.tolist()
+    if isinstance(node_attributes, str):
+        node_attributes = [node_attributes]
     if id_col is None:
         nx.set_node_attributes(
             graph,
             dict(enumerate(zip(pos_x_array, pos_y_array))),
             name="pos",
         )
-        if save_attributes:
-            for attribute in save_attributes:
+        if node_attributes:
+            for attribute in node_attributes:
                 nx.set_node_attributes(
                     graph,
                     dict(enumerate(gdf[attribute].values)),
@@ -190,8 +190,8 @@ def _set_node_attributes(graph, gdf, id_col, save_attributes):
             },
             name="pos",
         )
-        if save_attributes:
-            for attribute in save_attributes:
+        if node_attributes:
+            for attribute in node_attributes:
                 nx.set_node_attributes(
                     graph,
                     {
@@ -202,7 +202,7 @@ def _set_node_attributes(graph, gdf, id_col, save_attributes):
                 )
 
 
-def small_world_network(
+def geo_watts_strogatz_network(
     gdf,
     k: int | str,
     p: float,
@@ -212,11 +212,24 @@ def small_world_network(
     max_degree=150,
     id_col: str | None = None,
     query_factor: int = 2,
-    save_attributes: bool | str | list[str] = True,
+    node_attributes: bool | str | list[str] = True,
     constraint: Callable | None = None,
     verbose: bool = False,
 ) -> nx.Graph:
-    """Construct a small world network using the Geospatial Watts-Strogatz model
+    """Construct a geo watts-strogatz network using the Geospatial Watts-Strogatz model
+
+    The Geospatial Watts-Strogatz model is a variant of the Watts-Strogatz model that incorporates spatial considerations.
+
+    First, the model connects each node to its k nearest neighbors.
+
+    Then, it rewires each edge with probability p. When an edge is rewired, it is removed and a new edge is added to a random node.
+    The probability of being rewired to a new node is determined by the distance between the nodes:
+    $$
+    p(distance) = min(1, (distance / min_dist) ^ (-a))
+    $$
+    where min_dist is the minimum distance between nodes, and a is the distance decay exponent parameter, default is 3.
+    The minimum distance is a threshold, below which nodes are connected with probability 1, if an edge is chosen to be rewired.
+    It is 1/20 of the bounding box diagonal by default. Users can set the scaling factor directly if needed, which is the inverse of the minimum distance.
 
     Args:
         gdf (gpd.GeoDataFrame): GeoDataFrame containing nodes
@@ -236,7 +249,7 @@ def small_world_network(
                       If a column name, the values in the column will be used as the unique ID.
                       If None, the positional index of the node will be used as the unique ID.
         query_factor (int): factor of k to query neighbors initially to handle constraint filtering, default is 2
-        save_attributes (bool | str | list[str]): attributes to save in the graph, default is True.
+        node_attributes (bool | str | list[str]): node attributes to save in the graph, default is True.
                                                   If True, all attributes will be saved as node attributes.
                                                   If False, only the position of the nodes will be saved as a `pos` attribute.
                                                   If a string or a list of strings, the attributes will be saved as node attributes.
@@ -246,13 +259,13 @@ def small_world_network(
         verbose (bool): whether to show detailed progress messages, default is False
 
     Returns:
-        nx.Graph: small world network graph with average degree k, maximum degree max_degree
+        nx.Graph: a geo watts-strogatz network graph with average degree k, maximum degree max_degree
     """
     # Set logger level based on verbose flag
     logger.remove()
     logger.add(sys.stderr, level="DEBUG" if verbose else "WARNING")
     logger.debug(
-        f"Building small world network with k={k}, p={p}, a={a}, scaling_factor={scaling_factor}, max_degree={max_degree}"
+        f"Building geo watts-strogatz network with k={k}, p={p}, a={a}, scaling_factor={scaling_factor}, max_degree={max_degree}"
     )
     if gdf.crs and gdf.crs.is_geographic:
         warnings.warn(
@@ -335,7 +348,7 @@ def small_world_network(
     # no self loops or multiple edges allowed
     for this_node_idx in tqdm(
         nearest_neighbors,
-        desc="Rewiring edges in small world network",
+        desc="Rewiring edges in geo watts-strogatz network",
         disable=not verbose,
     ):
         for neighboring_node_idx in nearest_neighbors[this_node_idx]:
@@ -411,7 +424,7 @@ def small_world_network(
                         degree_centrality_array[random_node_idx] += 1
                         rewire_count += 1
                         chosen = True
-    _set_node_attributes(graph, gdf, id_col, save_attributes)
+    _set_node_attributes(graph, gdf, id_col, node_attributes)
     total_edges = graph.number_of_edges()
     logger.debug(
         f"Rewire Count: {rewire_count:,} edges out of {total_edges:,}. {rewire_count / total_edges * 100:.2f}% of edges rewired"

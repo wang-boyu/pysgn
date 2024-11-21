@@ -2,10 +2,10 @@
 
 import datetime
 
-from pysgn.small_world_network import small_world_network
+from pysgn.geo_watts_strogatz_network import geo_watts_strogatz_network
 
 __all__ = [
-    "small_world_network",
+    "geo_watts_strogatz_network",
 ]
 
 __title__ = "pysgn"
