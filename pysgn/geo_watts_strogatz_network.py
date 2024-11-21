@@ -1,4 +1,3 @@
-import random as rd
 import sys
 import warnings
 from collections import defaultdict
@@ -214,6 +213,7 @@ def geo_watts_strogatz_network(
     query_factor: int = 2,
     node_attributes: bool | str | list[str] = True,
     constraint: Callable | None = None,
+    random_state: int | None = None,
     verbose: bool = False,
 ) -> nx.Graph:
     """Construct a geo watts-strogatz network using the Geospatial Watts-Strogatz model
@@ -256,6 +256,7 @@ def geo_watts_strogatz_network(
         constraint (Callable | None): constraint function to filter out invalid neighbors, default is None
                                       Example: constraint=lambda u, v: u.household != v.household
                                       This will ensure that nodes from the same household are not connected.
+        random_state (int | None): random seed for reproducibility, default is None.
         verbose (bool): whether to show detailed progress messages, default is False
 
     Returns:
@@ -342,6 +343,7 @@ def geo_watts_strogatz_network(
             )
     if scaling_factor is None:
         scaling_factor = _find_scaling_factor(gdf)
+    np_rng = np.random.default_rng(seed=random_state)
     # connect each node to k/2 neighbors
     # rewire edges from each node
     # loop over all nodes in order (label) and neighbors in order (distance)
@@ -358,11 +360,11 @@ def geo_watts_strogatz_network(
             neighboring_node_graph_id = (
                 id_col_array[neighboring_node_idx] if id_col else neighboring_node_idx
             )
-            if rd.random() < p:
+            if np_rng.random() < p:
                 chosen = False
                 while not chosen:
                     # get a random position index from gdf
-                    random_node_idx = rd.randint(0, len(gdf) - 1)
+                    random_node_idx = np_rng.integers(0, len(gdf))
                     random_node_graph_id = (
                         id_col_array[random_node_idx] if id_col else random_node_idx
                     )
@@ -379,7 +381,7 @@ def geo_watts_strogatz_network(
                             )
                         )
                     ):
-                        random_node_idx = rd.randint(0, len(gdf) - 1)
+                        random_node_idx = np_rng.integers(0, len(gdf))
                         random_node_graph_id = (
                             id_col_array[random_node_idx] if id_col else random_node_idx
                         )
@@ -415,7 +417,7 @@ def geo_watts_strogatz_network(
                     # and a is the distance decay parameter
                     else:
                         q = (distance * scaling_factor) ** (-a)
-                    if rd.random() < q:
+                    if np_rng.random() < q:
                         graph.remove_edge(this_node_graph_id, neighboring_node_graph_id)
                         graph.add_edge(
                             this_node_graph_id, random_node_graph_id, length=distance
