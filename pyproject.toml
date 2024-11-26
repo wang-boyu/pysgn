@@ -51,8 +51,6 @@ docs = [
   "jupyterlab-lsp",
   "python-lsp-server",
   "isort",
-  "osmnx",
-  "cenpy",
 ]
 
 [project.urls]
