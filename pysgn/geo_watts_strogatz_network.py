@@ -276,9 +276,13 @@ def geo_watts_strogatz_network(
             this_node_graph_id = (
                 id_col_array[this_node_idx] if id_col else this_node_idx
             )
+            if this_node_graph_id not in graph:
+                graph.add_node(this_node_graph_id)
             neighboring_node_graph_id = (
                 id_col_array[neighboring_node_idx] if id_col else neighboring_node_idx
             )
+            if neighboring_node_graph_id not in graph:
+                graph.add_node(neighboring_node_graph_id)
             graph.add_edge(
                 this_node_graph_id, neighboring_node_graph_id, length=distance
             )

@@ -2,9 +2,11 @@
 
 import datetime
 
+from pysgn.geo_erdos_renyi_network import geo_erdos_renyi_network
 from pysgn.geo_watts_strogatz_network import geo_watts_strogatz_network
 
 __all__ = [
+    "geo_erdos_renyi_network",
     "geo_watts_strogatz_network",
 ]
 
