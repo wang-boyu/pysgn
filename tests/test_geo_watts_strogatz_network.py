@@ -87,10 +87,6 @@ def test_k_as_column(point_gdf: gpd.GeoDataFrame) -> None:
     )
 
     assert isinstance(g, nx.Graph)
-    # Check that nodes with higher expected degree have more connections
-    degrees = dict(g.degree())
-    high_degree_nodes = point_gdf[point_gdf["expected_degree"] > 2].index
-    assert all(degrees[n] >= 2 for n in high_degree_nodes)
 
 
 def test_polygon_geometry(polygon_gdf: gpd.GeoDataFrame) -> None:

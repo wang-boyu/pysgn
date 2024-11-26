@@ -85,7 +85,7 @@ def geo_erdos_renyi_network(
 
     graph = nx.Graph()
     # use centroid if geometry is a polygon
-    if gdf.geometry.geom_type[0] == "Polygon":
+    if gdf.geometry.geom_type.iloc[0] == "Polygon":
         pos_x_array = gdf.geometry.centroid.x.values
         pos_y_array = gdf.geometry.centroid.y.values
     else:

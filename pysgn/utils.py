@@ -18,7 +18,7 @@ def _find_scaling_factor(gdf) -> float:
 
 
 def _set_node_attributes(graph, gdf, id_col, node_attributes):
-    if gdf.geometry.geom_type[0] == "Polygon":
+    if gdf.geometry.geom_type.iloc[0] == "Polygon":
         pos_x_array = gdf.geometry.centroid.x.values
         pos_y_array = gdf.geometry.centroid.y.values
     else:

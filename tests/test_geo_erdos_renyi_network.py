@@ -1,3 +1,5 @@
+import random
+
 import geopandas as gpd
 import networkx as nx
 import pandas as pd
@@ -14,10 +16,11 @@ def point_gdf() -> gpd.GeoDataFrame:
     Returns:
         gpd.GeoDataFrame: Test GeoDataFrame with points
     """
-    points = [Point(x, y) for x, y in [(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)]]
+    points = [Point(x, y) for x in range(10) for y in range(10)]
     data = {
-        "id": range(5),
-        "group": ["A", "A", "B", "B", "C"],
+        "id": range(len(points)),
+        "group": random.choices(["A", "B", "C"], k=len(points)),
+        "expected_degree": random.choices(range(1, 10), k=len(points)),
         "geometry": points,
     }
     return gpd.GeoDataFrame(data, crs="EPSG:3857")
@@ -151,14 +154,14 @@ def test_index_as_id(point_gdf: gpd.GeoDataFrame) -> None:
 
     # Test with duplicated index
     dup_gdf = point_gdf.copy()
-    dup_gdf.index = [0, 0, 1, 1, 2]  # Duplicated indices
+    dup_gdf.index = random.choices(range(5), k=len(point_gdf))  # Duplicated indices
     with pytest.raises(ValueError, match="ID column must contain unique values"):
         geo_erdos_renyi_network(dup_gdf, id_col="index")
 
     # Test with multi-index
     multi_gdf = point_gdf.copy()
     multi_gdf.index = pd.MultiIndex.from_tuples(
-        [(0, "a"), (1, "b"), (2, "c"), (3, "d"), (4, "e")]
+        [(i, random.choice(["a", "b", "c"])) for i in range(len(point_gdf))]
     )
     with pytest.raises(ValueError, match="Multi-index is not supported"):
         geo_erdos_renyi_network(multi_gdf, id_col="index")

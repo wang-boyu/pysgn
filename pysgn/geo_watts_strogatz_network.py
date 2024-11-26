@@ -49,7 +49,7 @@ def _get_nearest_nodes(
         k_col = np.clip(k_col, 1, max_degree)
 
     # Get positions from either points or polygon centroids
-    if gdf.geometry.geom_type[0] == "Polygon":
+    if gdf.geometry.geom_type.iloc[0] == "Polygon":
         positions = np.stack([gdf.geometry.centroid.x, gdf.geometry.centroid.y], axis=1)
     else:
         positions = np.stack([gdf.geometry.x, gdf.geometry.y], axis=1)
@@ -251,7 +251,7 @@ def geo_watts_strogatz_network(
     rewire_count = 0
     graph = nx.Graph()
     # use centroid if geometry is a polygon
-    if gdf.geometry.geom_type[0] == "Polygon":
+    if gdf.geometry.geom_type.iloc[0] == "Polygon":
         pos_x_array = gdf.geometry.centroid.x.values
         pos_y_array = gdf.geometry.centroid.y.values
     else:
