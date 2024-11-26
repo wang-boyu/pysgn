@@ -1,1 +1,67 @@
 # PySGN: A Python package for constructing synthetic geospatial networks
+
+## Introduction
+
+PySGN is a Python package for constructing synthetic geospatial networks. It is built on top of the [NetworkX](https://networkx.github.io/) package, which provides a flexible and efficient data structure for representing complex networks and [GeoPandas](https://geopandas.org/), which extends the datatypes used by pandas to allow spatial operations on geometric types. PySGN is designed to be easy to use and flexible, allowing users to generate networks with a wide range of characteristics.
+
+## Installation
+
+PySGN can be installed using pip:
+
+```bash
+pip install pysgn
+```
+
+## Usage Example
+
+### Geospatial Erdős-Rényi Network
+
+Here's a simple example of how to use the `geo_erdos_renyi_network` function to create a geospatial Erdős-Rényi network:
+
+```python
+import geopandas as gpd
+from pysgn import geo_erdos_renyi_network
+
+# Load your geospatial data into a GeoDataFrame
+gdf = gpd.read_file('path/to/your/geospatial_data.shp')
+
+# Create a geospatial Erdős-Rényi network
+graph = geo_erdos_renyi_network(gdf, a=3)
+
+# Output the number of nodes and edges
+print(f"Number of nodes: {graph.number_of_nodes()}")
+print(f"Number of edges: {graph.number_of_edges()}")
+```
+
+### Geospatial Watts-Strogatz Network
+
+Similarly you can use the `geo_watts_strogatz_network` function to create a geospatial Watts-Strogatz network:
+
+```python
+import geopandas as gpd
+from pysgn import geo_watts_strogatz_network
+
+# Load your geospatial data into a GeoDataFrame
+gdf = gpd.read_file('path/to/your/geospatial_data.shp')
+
+# Create a geospatial Watts-Strogatz network
+graph = geo_watts_strogatz_network(gdf, k=4, p=0.1)
+
+# Output the number of nodes and edges
+print(f"Number of nodes: {graph.number_of_nodes()}")
+print(f"Number of edges: {graph.number_of_edges()}")
+```
+
+## Documentation
+
+For more information on how to use PySGN, please refer to the [documentation](https://pysgn.readthedocs.io/).
+
+## License
+
+PySGN is released under the MIT License.
+
+## Acknowledgements
+
+The algorithms implemented in PySGN are based on the following paper, with some improvements and modifications:
+
+- Ketevan Gallagher, Taylor Anderson, Andrew Crooks, and Andreas Züfle. 2023. Synthetic Geosocial Network Generation. In *Proceedings of the 7th ACM SIGSPATIAL Workshop on Location-based Recommendations, Geosocial Networks and Geoadvertising (LocalRec '23)*. Association for Computing Machinery, New York, NY, USA, 15–24. https://doi.org/10.1145/3615896.3628345
