@@ -1,5 +1,41 @@
 import networkx as nx
+import numpy as np
 from loguru import logger
+
+
+def _create_k_col(k, n, random_state=None) -> np.ndarray:
+    """
+    Creates a column of integer degree centrality so that its mean is equal to k/2.
+
+    - If k is even, all values are k//2.
+    - If k is odd, half of the values are k//2 and the other half are k//2 + 1.
+    - If k is float, a fraction of the values are floor(k/2) and the rest are ceil(k/2).
+      The fraction is determined by the decimal part of k/2. For example, if k/2 = 3.2,
+      80% of the values are 3 and 20% are 4.
+
+    Args:
+        k: The target mean degree centrality.
+        n: The number of elements in the column.
+        random_state: Seed for random number generator for reproducibility.
+
+    Returns:
+        np.ndarray: An array of integer degree centralities.
+    """
+    rng = np.random.default_rng(random_state)
+    if isinstance(k, int):
+        if k % 2 == 0:
+            return np.full(n, k // 2, dtype=int)
+        else:
+            return rng.choice([k // 2, k // 2 + 1], n, p=[0.5, 0.5])
+    elif isinstance(k, float):
+        half_k = k / 2
+        lower = int(np.floor(half_k))
+        upper = int(np.ceil(half_k))
+        # prevent `ZeroDivisionError: integer modulo by zero` if half_k < 1
+        upper_prob = half_k if half_k < 1 else half_k % lower
+        return rng.choice([lower, upper], n, p=[1 - upper_prob, upper_prob])
+    else:
+        raise ValueError("k must be an integer or a float.")
 
 
 def _find_scaling_factor(gdf) -> float:

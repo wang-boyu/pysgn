@@ -11,16 +11,17 @@ from loguru import logger
 from sklearn.neighbors import KDTree
 from tqdm.auto import tqdm
 
-from .utils import _find_scaling_factor, _set_node_attributes
+from .utils import _create_k_col, _find_scaling_factor, _set_node_attributes
 
 
 def _get_nearest_nodes(
     gdf: gpd.GeoDataFrame,
-    k: int | str,
+    k: int | float | str,
     *,
     max_degree: int,
     query_factor: int = 2,
     constraint: Callable | None = None,
+    random_state: int | None = None,
     verbose: bool = False,
 ) -> tuple[dict[int, list[int]], np.ndarray]:
     """
@@ -28,14 +29,15 @@ def _get_nearest_nodes(
 
     Args:
         gdf (gpd.GeoDataFrame): GeoDataFrame containing nodes
-        k (int | str): number of nearest neighbors to connect initially
-                       If a number, it determines the number of nearest neighbors to connect initially, also the average degree of the network.
-                       If a string, it determines the column name containing expected degree centrality for each node, when connecting to neighbors initially.
+        k (int | float | str): number of nearest neighbors to connect initially
+                               If a number, it determines the number of nearest neighbors to connect initially, also the average degree of the network.
+                               If a string, it determines the column name containing expected degree centrality for each node, when connecting to neighbors initially.
         max_degree (int): maximum degree centrality allowed
         query_factor (int): factor of k to query neighbors initially to handle constraint filtering
         constraint (Callable | None): constraint function to filter out invalid neighbors, default is None
                                       Example: constraint=lambda u, v: u.household != v.household
                                       This will ensure that nodes from the same household are not connected.
+        random_state (int | None): random seed for reproducibility, default is None.
         verbose (bool): whether to show detailed progress messages, default is False
 
     Returns:
@@ -46,7 +48,11 @@ def _get_nearest_nodes(
     degree_centrality_array = np.zeros(len(gdf))
     if isinstance(k, str):
         k_col = gdf[k].values // 2
-        k_col = np.clip(k_col, 1, max_degree)
+    elif isinstance(k, int | float):
+        k_col = _create_k_col(k, len(gdf), random_state=random_state)
+    else:
+        raise ValueError("k must be an integer, a float, or a string")
+    k_col = np.clip(k_col, 0, max_degree)
 
     # Get positions from either points or polygon centroids
     if gdf.geometry.geom_type.iloc[0] == "Polygon":
@@ -65,7 +71,7 @@ def _get_nearest_nodes(
 
     # Step 2: Find nearest neighbors using KDTree queries with constraint handling
     for this_node_idx in tqdm(range(len(gdf)), desc=desc, disable=not verbose):
-        expected_num_neighbors = k if isinstance(k, int) else k_col[this_node_idx]
+        expected_num_neighbors = k_col[this_node_idx]
         if expected_num_neighbors > max_degree:
             logger.error(
                 f"Node {this_node_idx} has expected degree {expected_num_neighbors} > max degree {max_degree}. Skipping node."
@@ -94,9 +100,7 @@ def _get_nearest_nodes(
                 if degree_centrality_array[this_node_idx] >= max_degree:
                     continue
                 # Avoid nodes with degree centrality >= max_degree
-                expected_num_neighbors_of_new_node = (
-                    k if isinstance(k, int) else k_col[new_node_idx]
-                )
+                expected_num_neighbors_of_new_node = k_col[new_node_idx]
                 if (
                     degree_centrality_array[new_node_idx]
                     + expected_num_neighbors_of_new_node
@@ -218,8 +222,8 @@ def geo_watts_strogatz_network(
             UserWarning,
             stacklevel=2,
         )
-    if not isinstance(k, int | str):
-        raise ValueError("k must be an integer or a string")
+    if k == 0:
+        raise ValueError("k must be greater than 0")
     if not 0 <= p <= 1:
         raise ValueError("p must be between 0 and 1")
     if id_col is not None:
@@ -228,26 +232,18 @@ def geo_watts_strogatz_network(
         id_col_array = gdf.index.values if id_col == "index" else gdf[id_col].values
         if len(np.unique(id_col_array)) != len(id_col_array):
             raise ValueError("ID column must contain unique values")
-    if isinstance(k, str):
+    if isinstance(k, int | float | str):
         nearest_neighbors, degree_centrality_array = _get_nearest_nodes(
             gdf,
             k,
             max_degree=max_degree,
             query_factor=query_factor,
             constraint=constraint,
-            verbose=verbose,
-        )
-    elif isinstance(k, int):
-        nearest_neighbors, degree_centrality_array = _get_nearest_nodes(
-            gdf,
-            max(1, k // 2),
-            max_degree=max_degree,
-            query_factor=query_factor,
-            constraint=constraint,
+            random_state=random_state,
             verbose=verbose,
         )
     else:
-        raise ValueError("k must be an integer or a string")
+        raise ValueError("k must be an integer, a float, or a string")
     rewire_count = 0
     graph = nx.Graph()
     # use centroid if geometry is a polygon

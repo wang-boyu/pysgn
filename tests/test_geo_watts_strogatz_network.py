@@ -170,9 +170,9 @@ def test_invalid_inputs(point_gdf: gpd.GeoDataFrame) -> None:
     Args:
         point_gdf: Test GeoDataFrame with points
     """
-    # Test invalid k type
+    # Test invalid k value
     with pytest.raises(ValueError):
-        geo_watts_strogatz_network(point_gdf, k=1.5, p=0.1)
+        geo_watts_strogatz_network(point_gdf, k=0, p=0.1)
 
     # Test invalid probability
     with pytest.raises(ValueError):
