@@ -223,6 +223,7 @@ latex_documents = [
         "index",
         "PySGN.tex",
         "PySGN Documentation",
+        "Wang Boyu",
         "manual",
     )
 ]
@@ -270,6 +271,7 @@ texinfo_documents = [
         "index",
         "PySGN",
         "PySGN Documentation",
+        "Wang Boyu",
         "One line description of project.",
         "Miscellaneous",
     )

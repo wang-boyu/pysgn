@@ -1,6 +1,6 @@
 # PySGN: A Python package for constructing synthetic geospatial networks
 
-[![GitHub CI](https://github.com/wang-boyu/pysgn/workflows/ci/badge.svg)](https://github.com/wang-boyu/pysgn/actions) [![Read the Docs](https://readthedocs.org/projects/pysgn/badge/?version=stable)](https://pysgn.readthedocs.io/stable) [![Codecov](https://codecov.io/gh/wang-boyu/pysgn/branch/main/graph/badge.svg)](https://codecov.io/gh/wang-boyu/pysgn) [![PyPI](https://img.shields.io/pypi/v/pysgn.svg)](https://pypi.org/project/pysgn) [![PyPI - License](https://img.shields.io/pypi/l/pysgn)](https://pypi.org/project/pysgn/) [![PyPI - Downloads](https://img.shields.io/pypi/dw/pysgn)](https://pypistats.org/packages/pysgn) [![DOI](https://zenodo.org/badge/DOI/10.3847/xxxxx.svg)](https://doi.org/10.3847/xxxxx)
+[![GitHub CI](https://github.com/wang-boyu/pysgn/actions/workflows/build.yml/badge.svg)](https://github.com/wang-boyu/pysgn/actions) [![Read the Docs](https://readthedocs.org/projects/pysgn/badge/?version=stable)](https://pysgn.readthedocs.io/stable) [![Codecov](https://codecov.io/gh/wang-boyu/pysgn/branch/main/graph/badge.svg)](https://codecov.io/gh/wang-boyu/pysgn) [![PyPI](https://img.shields.io/pypi/v/pysgn.svg)](https://pypi.org/project/pysgn) [![PyPI - License](https://img.shields.io/pypi/l/pysgn)](https://pypi.org/project/pysgn/) [![PyPI - Downloads](https://img.shields.io/pypi/dw/pysgn)](https://pypistats.org/packages/pysgn) [![DOI](https://zenodo.org/badge/DOI/10.3847/xxxxx.svg)](https://doi.org/10.3847/xxxxx)
 
 
 ## Introduction
