@@ -1,5 +1,8 @@
 # PySGN: A Python package for constructing synthetic geospatial networks
 
+[![GitHub CI](https://github.com/wang-boyu/pysgn/workflows/ci/badge.svg)](https://github.com/wang-boyu/pysgn/actions) [![Read the Docs](https://readthedocs.org/projects/pysgn/badge/?version=stable)](https://pysgn.readthedocs.io/stable) [![Codecov](https://codecov.io/gh/wang-boyu/pysgn/branch/main/graph/badge.svg)](https://codecov.io/gh/wang-boyu/pysgn) [![PyPI](https://img.shields.io/pypi/v/pysgn.svg)](https://pypi.org/project/pysgn) [![PyPI - License](https://img.shields.io/pypi/l/pysgn)](https://pypi.org/project/pysgn/) [![PyPI - Downloads](https://img.shields.io/pypi/dw/pysgn)](https://pypistats.org/packages/pysgn) [![DOI](https://zenodo.org/badge/DOI/10.3847/xxxxx.svg)](https://doi.org/10.3847/xxxxx)
+
+
 ## Introduction
 
 PySGN is a Python package for constructing synthetic geospatial networks. It is built on top of the [NetworkX](https://networkx.github.io/) package, which provides a flexible and efficient data structure for representing complex networks and [GeoPandas](https://geopandas.org/), which extends the datatypes used by pandas to allow spatial operations on geometric types. PySGN is designed to be easy to use and flexible, allowing users to generate networks with a wide range of characteristics.
@@ -55,6 +58,15 @@ print(f"Number of edges: {graph.number_of_edges()}")
 ## Documentation
 
 For more information on how to use PySGN, please refer to the [documentation](https://pysgn.readthedocs.io/).
+
+## Contributing
+
+If you run into an issue, please file a [ticket](https://github.com/wang-boyu/pysgn/issues) for us to discuss. If possible, follow up with a pull request.
+
+If you would like to add a feature, please reach out via [ticket](https://github.com/wang-boyu/pysgn/issues) or start a [discussion](https://github.com/wang-boyu/pysgn/discussions).
+A feature is most likely to be added if you build it!
+
+Don't forget to check out the [Contributors guide](https://github.com/wang-boyu/pysgn/blob/main/CONTRIBUTING.md).
 
 ## License
 
