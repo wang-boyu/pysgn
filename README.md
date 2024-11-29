@@ -76,4 +76,4 @@ PySGN is released under the MIT License.
 
 The algorithms implemented in PySGN are based on the following paper, with some improvements and modifications:
 
-- Ketevan Gallagher, Taylor Anderson, Andrew Crooks, and Andreas Züfle. 2023. Synthetic Geosocial Network Generation. In *Proceedings of the 7th ACM SIGSPATIAL Workshop on Location-based Recommendations, Geosocial Networks and Geoadvertising (LocalRec '23)*. Association for Computing Machinery, New York, NY, USA, 15–24. https://doi.org/10.1145/3615896.3628345
+- Ketevan Gallagher, Taylor Anderson, Andrew Crooks, and Andreas Züfle. 2023. Synthetic Geosocial Network Generation. In *Proceedings of the 7th ACM SIGSPATIAL Workshop on Location-based Recommendations, Geosocial Networks and Geoadvertising (LocalRec '23)*. Association for Computing Machinery, New York, NY, USA, 15–24. [https://doi.org/10.1145/3615896.3628345](https://doi.org/10.1145/3615896.3628345)
