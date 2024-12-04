@@ -43,6 +43,12 @@ extensions = [
     "myst_nb"
 ]
 
+# "dollarmath" for parsing of dollar $ and $$ encapsulated math
+# "amsmath" for direct parsing of amsmath LaTeX environments
+# see https://myst-parser.readthedocs.io/en/latest/syntax/optional.html#math-shortcuts
+myst_enable_extensions = ["dollarmath", "amsmath"]
+myst_dmath_double_inline = True
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
 

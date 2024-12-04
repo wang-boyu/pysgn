@@ -161,7 +161,7 @@ def geo_watts_strogatz_network(
     random_state: int | None = None,
     verbose: bool = False,
 ) -> nx.Graph:
-    """Construct a geo watts-strogatz network using the Geospatial Watts-Strogatz model
+    r"""Construct a geo watts-strogatz network using the Geospatial Watts-Strogatz model
 
     The Geospatial Watts-Strogatz model is a variant of the Watts-Strogatz model that incorporates spatial considerations.
 
@@ -169,39 +169,51 @@ def geo_watts_strogatz_network(
 
     Then, it rewires each edge with probability p. When an edge is rewired, it is removed and a new edge is added to a random node.
     The probability of being rewired to a new node is determined by the distance between the nodes:
-    $$
-    p(distance) = min(1, (distance / min_dist) ^ (-a))
-    $$
+
+    .. math::
+        p(\textrm{distance}|a, \textrm{min_dist}) = \textrm{min}\left(1, \left(\frac{\textrm{distance}}{\textrm{min_dist}}\right) ^ {-a}\right)
+
     where min_dist is the minimum distance between nodes, and a is the distance decay exponent parameter, default is 3.
     The minimum distance is a threshold, below which nodes are connected with probability 1, if an edge is chosen to be rewired.
     It is 1/20 of the bounding box diagonal by default. Users can set the scaling factor directly if needed, which is the inverse of the minimum distance.
 
     Args:
         gdf (gpd.GeoDataFrame): GeoDataFrame containing nodes
+
         k (int | str): number of nearest neighbors to connect initially
                        If a number, it determines the number of nearest neighbors to connect initially, also the average degree of the network.
                        If a string, it determines the column name containing expected degree centrality for each node, when connecting to neighbors initially.
+
         p (float): probability of rewiring an edge
+
     Keyword Args:
         a (int): distance decay exponent parameter, default is 3
+
         scaling_factor (float): scaling factor is the inverse of the minimum distance between nodes, default is None.
                                 The minimum distance is a threshold, below which nodes are connected with probability 1,
                                 if an edge is chosen to be rewired.
                                 If None, the scaling factor will be calculated based on the bounding box of the GeoDataFrame.
+
         max_degree (int): maximum degree centrality allowed, default is 150
+
         id_col (str): column name containing unique IDs, default is None.
                       If "index", the index of the GeoDataFrame will be used as the unique ID.
                       If a column name, the values in the column will be used as the unique ID.
                       If None, the positional index of the node will be used as the unique ID.
+
         query_factor (int): factor of k to query neighbors initially to handle constraint filtering, default is 2
+
         node_attributes (bool | str | list[str]): node attributes to save in the graph, default is True.
                                                   If True, all attributes will be saved as node attributes.
                                                   If False, only the position of the nodes will be saved as a `pos` attribute.
                                                   If a string or a list of strings, the attributes will be saved as node attributes.
+
         constraint (Callable | None): constraint function to filter out invalid neighbors, default is None
                                       Example: constraint=lambda u, v: u.household != v.household
                                       This will ensure that nodes from the same household are not connected.
+
         random_state (int | None): random seed for reproducibility, default is None.
+
         verbose (bool): whether to show detailed progress messages, default is False
 
     Returns:

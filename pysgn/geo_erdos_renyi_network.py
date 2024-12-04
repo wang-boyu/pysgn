@@ -23,14 +23,15 @@ def geo_erdos_renyi_network(
     random_state: int | None = None,
     verbose: bool = False,
 ) -> nx.Graph:
-    """Construct a geo erdos-renyi network using the Geospatial Erdős-Rényi model
+    r"""Construct a geo erdos-renyi network using the Geospatial Erdős-Rényi model
 
     The Geospatial Erdős-Rényi model is a variant of the Erdős-Rényi model that incorporates spatial considerations.
 
     Each possible edge in the network is connected with probability:
-    $$
-    p(distance) = min(1, (distance / min_dist) ^ (-a))
-    $$
+
+    .. math::
+        p(\textrm{distance}|a, \textrm{min_dist}) = \textrm{min}\left(1, \left(\frac{\textrm{distance}}{\textrm{min_dist}}\right) ^ {-a}\right)
+
     where min_dist is the minimum distance between nodes, and a is the distance decay exponent parameter, default is 3.
     The minimum distance is a threshold, below which nodes are connected with probability 1, if an edge is chosen to be rewired.
     It is 1/20 of the bounding box diagonal by default. Users can set the scaling factor directly if needed, which is the inverse of the minimum distance.
@@ -38,24 +39,32 @@ def geo_erdos_renyi_network(
     Args:
         gdf (gpd.GeoDataFrame): GeoDataFrame containing nodes
     Keyword Args:
+
         a (int): distance decay exponent parameter, default is 3
+
         scaling_factor (float): scaling factor is the inverse of the minimum distance between nodes, default is None.
                                 The minimum distance is a threshold, below which nodes are connected with probability 1,
                                 if an edge is chosen to be rewired.
                                 If None, the scaling factor will be calculated based on the bounding box of the GeoDataFrame.
+
         max_degree (int): maximum degree centrality allowed, default is 150
+
         id_col (str): column name containing unique IDs, default is None.
                       If "index", the index of the GeoDataFrame will be used as the unique ID.
                       If a column name, the values in the column will be used as the unique ID.
                       If None, the positional index of the node will be used as the unique ID.
+
         node_attributes (bool | str | list[str]): node attributes to save in the graph, default is True.
                                                   If True, all attributes will be saved as node attributes.
                                                   If False, only the position of the nodes will be saved as a `pos` attribute.
                                                   If a string or a list of strings, the attributes will be saved as node attributes.
+
         constraint (Callable | None): constraint function to filter out invalid neighbors, default is None
                                       Example: constraint=lambda u, v: u.household != v.household
                                       This will ensure that nodes from the same household are not connected.
+
         random_state (int | None): random seed for reproducibility, default is None.
+
         verbose (bool): whether to show detailed progress messages, default is False
 
     Returns:
