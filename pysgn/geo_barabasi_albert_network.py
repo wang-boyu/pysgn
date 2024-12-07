@@ -21,6 +21,7 @@ def geo_barabasi_albert_network(
     id_col: str | None = None,
     node_attributes: bool | str | list[str] = True,
     constraint: Callable | None = None,
+    node_order: Callable | None = None,
     random_state: int | None = None,
     verbose: bool = False,
 ) -> nx.Graph:
@@ -62,12 +63,41 @@ def geo_barabasi_albert_network(
                                     Example: constraint=lambda u, v: u.household != v.household
                                     This will ensure that nodes from the same household are not connected.
 
+        node_order (Callable | None): function to determine the order of node addition, default is None.
+                                    If None, nodes are added sequentially (traditional BA model).
+                                    The function should take a GeoDataFrame as input and return an array of indices
+                                    specifying the order in which nodes should be added.
+                                    Built-in ordering strategies are available in pysgn.ordering module.
+
         random_state (int | None): random seed for reproducibility, default is None
 
         verbose (bool): whether to show detailed progress messages, default is False
 
     Returns:
         nx.Graph: a geo barabasi-albert network graph with m edges per new node
+
+    Examples:
+        >>> import geopandas as gpd
+        >>> from pysgn import geo_barabasi_albert_network
+        >>> from pysgn.ordering import density_order, random_order, attribute_order
+        >>>
+        >>> # Load data
+        >>> gdf = gpd.read_file("points.gpkg")
+        >>>
+        >>> # Create network with sequential ordering (traditional)
+        >>> G1 = geo_barabasi_albert_network(gdf, m=3)
+        >>>
+        >>> # Create network with density-based ordering
+        >>> G2 = geo_barabasi_albert_network(gdf, m=3, node_order=density_order())
+        >>>
+        >>> # Create network with population-based ordering
+        >>> G3 = geo_barabasi_albert_network(gdf, m=3, node_order=attribute_order(by="population"))
+        >>>
+        >>> # Create network with custom ordering
+        >>> def custom_order(gdf):
+        ...     # Your custom ordering logic here
+        ...     return indices
+        >>> G4 = geo_barabasi_albert_network(gdf, m=3, node_order=custom_order)
     """
     # Set logger level based on verbose flag
     logger.remove()
@@ -124,10 +154,30 @@ def geo_barabasi_albert_network(
             degree_centrality_array[i] += 1
             degree_centrality_array[j] += 1
 
+    # Get node order if provided
+    if node_order is not None:
+        try:
+            order = node_order(gdf)
+            if not isinstance(order, np.ndarray):
+                raise TypeError("node_order function must return a numpy array")
+            if len(order) != len(gdf):
+                raise ValueError(
+                    "node_order function must return an array of length equal to the GeoDataFrame"
+                )
+            if not np.array_equal(np.sort(order), np.arange(len(gdf))):
+                raise ValueError(
+                    "node_order function must return a permutation of indices"
+                )
+        except Exception as e:
+            raise ValueError(f"Error in node_order function: {e!s}") from e
+    else:
+        order = np.arange(len(gdf))
+
     # Add remaining nodes
-    for source_idx in tqdm(
+    for idx in tqdm(
         range(m, len(gdf)), desc="Adding nodes to network", disable=not verbose
     ):
+        source_idx = order[idx]  # Use ordered index
         source_id = id_col_array[source_idx] if id_col else source_idx
         if source_id not in graph:
             graph.add_node(source_id)
