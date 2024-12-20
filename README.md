@@ -5,7 +5,7 @@
 
 ## Introduction
 
-PySGN is a Python package for constructing synthetic geospatial networks. It is built on top of the [NetworkX](https://networkx.github.io/) package, which provides a flexible and efficient data structure for representing complex networks and [GeoPandas](https://geopandas.org/), which extends the datatypes used by pandas to allow spatial operations on geometric types. PySGN is designed to be easy to use and flexible, allowing users to generate networks with a wide range of characteristics.
+PySGN (**Py**thon for **S**ynthetic **G**eospatial **N**etworks) is a Python package for constructing synthetic geospatial networks. It is built on top of the [NetworkX](https://networkx.github.io/) package, which provides a flexible and efficient data structure for representing complex networks and [GeoPandas](https://geopandas.org/), which extends the datatypes used by pandas to allow spatial operations on geometric types. PySGN is designed to be easy to use and flexible, allowing users to generate networks with a wide range of characteristics.
 
 ## Installation
 
@@ -71,9 +71,3 @@ Don't forget to check out the [Contributors guide](https://github.com/wang-boyu/
 ## License
 
 PySGN is released under the MIT License.
-
-## Acknowledgements
-
-The algorithms implemented in PySGN are based on the following paper, with some improvements and modifications:
-
-- Ketevan Gallagher, Taylor Anderson, Andrew Crooks, and Andreas Züfle. 2023. Synthetic Geosocial Network Generation. In *Proceedings of the 7th ACM SIGSPATIAL Workshop on Location-based Recommendations, Geosocial Networks and Geoadvertising (LocalRec '23)*. Association for Computing Machinery, New York, NY, USA, 15–24. [https://doi.org/10.1145/3615896.3628345](https://doi.org/10.1145/3615896.3628345)
