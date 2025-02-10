@@ -77,7 +77,7 @@ def test_density_order_knn(point_gdf: GeoDataFrame) -> None:
     Args:
         point_gdf: Test GeoDataFrame with points
     """
-    order = density_order(point_gdf, method="knn", n_neighbors=5)
+    order = density_order(point_gdf, method="knn", k=5)
 
     # Check output properties
     assert isinstance(order, np.ndarray)
@@ -85,7 +85,7 @@ def test_density_order_knn(point_gdf: GeoDataFrame) -> None:
     assert set(order) == set(range(len(point_gdf)))
 
     # Test with different n_neighbors
-    order2 = density_order(point_gdf, method="knn", n_neighbors=3)
+    order2 = density_order(point_gdf, method="knn", k=3)
     assert len(order2) == len(point_gdf)
 
 
@@ -111,7 +111,10 @@ def test_density_order_invalid_method(point_gdf: GeoDataFrame) -> None:
     Args:
         point_gdf: Test GeoDataFrame with points
     """
-    with pytest.raises(ValueError, match="Unknown method"):
+    with pytest.raises(
+        ValueError,
+        match="Unknown density ordering method: invalid. Use 'knn' or 'kde'.",
+    ):
         density_order(point_gdf, method="invalid")
 
 
@@ -122,12 +125,12 @@ def test_random_order(point_gdf: GeoDataFrame) -> None:
         point_gdf: Test GeoDataFrame with points
     """
     # Test reproducibility with seed
-    order1 = random_order(point_gdf, seed=42)
-    order2 = random_order(point_gdf, seed=42)
+    order1 = random_order(point_gdf, random_state=42)
+    order2 = random_order(point_gdf, random_state=42)
     assert np.array_equal(order1, order2)
 
     # Test different seeds give different orders
-    order3 = random_order(point_gdf, seed=43)
+    order3 = random_order(point_gdf, random_state=43)
     assert not np.array_equal(order1, order3)
 
     # Check output properties
@@ -163,9 +166,7 @@ def test_attribute_order_multiple(point_gdf: GeoDataFrame) -> None:
 
     # Check if ordering is correct
     sorted_df = point_gdf.iloc[order]
-    assert sorted_df.equals(
-        point_gdf.sort_values(["category", "value"]).iloc[sorted_df.index]
-    )
+    assert sorted_df.equals(point_gdf.sort_values(["category", "value"]))
 
 
 def test_attribute_order_invalid_column(point_gdf: GeoDataFrame) -> None:
@@ -174,10 +175,10 @@ def test_attribute_order_invalid_column(point_gdf: GeoDataFrame) -> None:
     Args:
         point_gdf: Test GeoDataFrame with points
     """
-    with pytest.raises(ValueError, match="Column 'invalid' not found"):
+    with pytest.raises(KeyError, match="invalid"):
         attribute_order(point_gdf, by="invalid")
 
-    with pytest.raises(ValueError, match="Columns"):
+    with pytest.raises(KeyError, match="invalid"):
         attribute_order(point_gdf, by=["value", "invalid"])
 
 

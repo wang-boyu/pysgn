@@ -2,7 +2,6 @@ import sys
 import warnings
 from collections.abc import Callable
 
-import geopandas as gpd
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -15,220 +14,208 @@ from .utils import _find_scaling_factor, _set_node_attributes
 def geo_barabasi_albert_network(
     gdf,
     *,
+    m: int = 2,
     a: int = 3,
     scaling_factor: float | None = None,
     max_degree: int = 150,
     id_col: str | None = None,
     node_attributes: bool | str | list[str] = True,
     constraint: Callable | None = None,
-    node_order: Callable[[gpd.GeoDataFrame], np.ndarray] | str | None = None,
+    node_order: Callable[[pd.DataFrame], np.ndarray] | str | None = None,
     random_state: int | None = None,
     verbose: bool = False,
 ) -> nx.Graph:
-    r"""Construct a geo barabasi-albert network using the Geospatial Barabási-Albert model
+    r"""Construct a geo Barabási-Albert network with geospatial preferential attachment.
 
-    The Geospatial Barabási-Albert model is a variant of the Barabási-Albert model that incorporates spatial considerations.
-    Each new node connects to m existing nodes with probability proportional to both their degree and geographic distance:
+    The geo Barabási-Albert (BA) model is a geospatial modification of the classical BA model,
+    incorporating spatial factors into the preferential attachment mechanism. When adding a new node,
+    the probability of attaching to an existing node is proportional to the existing node's degree (plus
+    an initial attractiveness) and a geospatial decay function based on the distance between the nodes:
 
     .. math::
-        P(i) \propto k_i \cdot \textrm{min}\left(1, \left(\frac{\textrm{distance}}{\textrm{min_dist}}\right) ^ {-a}\right)
+        f(\textrm{distance}) =
+        \begin{cases}
+            1, & \text{if } \text{distance} < 1/\text{scaling\_factor} \\
+            (\text{distance} \times \text{scaling\_factor})^{-a}, & \text{otherwise.}
+        \end{cases}
 
-    where k_i is the degree of node i, min_dist is the minimum distance between nodes, and a is the distance decay
-    exponent parameter, default is 3.
+    Thus, when a new node is added, each existing node \\( j \\) is assigned a weight
+
+    .. math::
+        w_j = (\text{degree}_j + 1) \times f(\text{distance}(i,j)),
+
+    and the new node attaches to \\( m \\) different nodes chosen without replacement with probability proportional
+    to these weights.
+
+    For the first \\( m \\) nodes a complete (seed) network is created.
 
     Args:
-        gdf (gpd.GeoDataFrame): GeoDataFrame containing nodes
+        gdf (gpd.GeoDataFrame): GeoDataFrame containing nodes.
 
     Keyword Args:
-        a (int): distance decay exponent parameter, default is 3
-
-        scaling_factor (float): scaling factor is the inverse of the minimum distance between nodes, default is None.
-                               The minimum distance is a threshold, below which nodes are connected with probability 1.
-                               If None, the scaling factor will be calculated based on the bounding box of the GeoDataFrame.
-
-        max_degree (int): maximum degree centrality allowed, default is 150
-
-        id_col (str): column name containing unique IDs, default is None.
-                      If "index", the index of the GeoDataFrame will be used as the unique ID.
-                      If a column name, the values in the column will be used as the unique ID.
-                      If None, the positional index of the node will be used as the unique ID.
-
-        node_attributes (bool | str | list[str]): node attributes to save in the graph, default is True.
-                                                 If True, all attributes will be saved as node attributes.
-                                                 If False, only the position of the nodes will be saved as a `pos` attribute.
-                                                 If a string or a list of strings, the attributes will be saved as node attributes.
-
-        constraint (Callable | None): constraint function to filter out invalid neighbors, default is None
-                                    Example: constraint=lambda u, v: u.household != v.household
-                                    This will ensure that nodes from the same household are not connected.
-
-        node_order (Callable[[gpd.GeoDataFrame], np.ndarray] | str | None): function or column name to determine the order of node addition, default is None.
-                                                                        If None, nodes are added sequentially (traditional BA model).
-                                                                        If a function, it should take a GeoDataFrame as input and return an array of indices.
-                                                                        If a string, it should be a column name in the GeoDataFrame containing the order indices.
-                                                                        Built-in ordering strategies are available in pysgn.ordering module.
-
-        random_state (int | None): random seed for reproducibility, default is None
-
-        verbose (bool): whether to show detailed progress messages, default is False
+        m (int): Number of edges to attach from a new node to existing nodes (and size of the seed network), default is 2.
+        a (int): Distance decay exponent parameter, default is 3.
+        scaling_factor (float | None): Scaling factor (inverse of a minimum distance threshold). If None, it will be computed
+                                       from the bounding box of the GeoDataFrame.
+        max_degree (int): Maximum allowed degree for nodes, default is 150.
+        id_col (str | None): Column name containing unique IDs. If "index", the GeoDataFrame's index is used. If None,
+                             the positional index (after ordering) is used.
+        node_attributes (bool | str | list[str]): Which attributes to store on nodes. See the documentation of
+                                                    `_set_node_attributes`.
+        constraint (Callable | None): A function with signature ``constraint(u, v)`` returning True if nodes u and v may be connected.
+        node_order (Callable[[gpd.GeoDataFrame], np.ndarray] | str | None): A function or column name to determine the order
+                                      in which nodes are added. If None, nodes are added sequentially.
+        random_state (int | None): Random seed for reproducibility.
+        verbose (bool): If True, show progress messages.
 
     Returns:
-        nx.Graph: a geo barabasi-albert network graph with m edges per new node
-
-    Examples:
-        >>> import geopandas as gpd
-        >>> from pysgn import geo_barabasi_albert_network
-        >>> from pysgn.ordering import density_order, random_order, attribute_order
-        >>>
-        >>> # Load data
-        >>> gdf = gpd.read_file("points.gpkg")
-        >>>
-        >>> # Create network with sequential ordering (traditional)
-        >>> G1 = geo_barabasi_albert_network(gdf)
-        >>>
-        >>> # Create network with density-based ordering
-        >>> node_order = density_order(gdf, method="kde")
-        >>> G2 = geo_barabasi_albert_network(gdf, node_order=node_order)
-        >>>
-        >>> # Create network with population-based ordering
-        >>> node_order = attribute_order(gdf, by="population")
-        >>> G3 = geo_barabasi_albert_network(gdf, node_order=node_order)
-        >>>
-        >>> # Use a precomputed order stored in a column
-        >>> gdf['order'] = attribute_order(gdf, by="population")
-        >>> G4 = geo_barabasi_albert_network(gdf, node_order='order')
+        nx.Graph: A geo Barabási-Albert network.
     """
     # Set logger level based on verbose flag
     logger.remove()
     logger.add(sys.stderr, level="DEBUG" if verbose else "WARNING")
     logger.debug(
-        f"Building geo barabasi-albert network with a={a}, scaling_factor={scaling_factor}, max_degree={max_degree}"
+        f"Building geo Barabási-Albert network with m={m}, a={a}, scaling_factor={scaling_factor}, max_degree={max_degree}"
     )
 
     if gdf.crs and gdf.crs.is_geographic:
         warnings.warn(
-            "Geometry is in a geographic CRS. "
-            "Results from distance calculations are likely incorrect. "
-            "Use 'GeoDataFrame.to_crs()' to re-project geometries to a "
-            "projected CRS before this operation.\n",
+            "Geometry is in a geographic CRS. Results from distance calculations may be incorrect. "
+            "Consider re-projecting using 'to_crs()'.",
             UserWarning,
             stacklevel=2,
         )
 
+    # Determine node addition order.
+    if node_order is None:
+        order = np.arange(len(gdf))
+    elif callable(node_order):
+        order = node_order(gdf)
+    elif isinstance(node_order, str):
+        # Interpret the string as a column name that contains order indices.
+        order = np.argsort(gdf[node_order].values)
+    else:
+        raise ValueError(
+            "node_order must be None, a callable, or a string representing a column name"
+        )
+
+    if len(order) != len(gdf):
+        raise ValueError(
+            "The node_order must return an array of indices of the same length as gdf"
+        )
+
+    # Determine node IDs based on id_col if provided.
     if id_col is not None:
         if id_col == "index" and isinstance(gdf.index, pd.MultiIndex):
             raise ValueError("Multi-index is not supported")
-        id_col_array = gdf.index.values if id_col == "index" else gdf[id_col].values
-        if len(np.unique(id_col_array)) != len(id_col_array):
-            raise ValueError("ID column must contain unique values")
-
-    # Get positions from either points or polygon centroids
-    if gdf.geometry.geom_type.iloc[0] == "Polygon":
-        pos_x_array = gdf.geometry.centroid.x.values
-        pos_y_array = gdf.geometry.centroid.y.values
+        id_values = gdf.index.values if id_col == "index" else gdf[id_col].values
+        # Reorder IDs according to node addition order.
+        id_values = id_values[order]
     else:
-        pos_x_array = gdf.geometry.x.values
-        pos_y_array = gdf.geometry.y.values
+        id_values = np.arange(len(gdf))[order]
 
+    if len(np.unique(id_values)) != len(id_values):
+        raise ValueError("ID column must contain unique values")
+
+    # Compute scaling_factor if not provided.
     if scaling_factor is None:
         scaling_factor = _find_scaling_factor(gdf)
 
-    np_rng = np.random.default_rng(seed=random_state)
-    graph = nx.Graph()
-    degree_centrality_array = np.ones(len(gdf))
-
-    # Get node order if provided
-    if node_order is not None:
-        if isinstance(node_order, str):
-            if node_order not in gdf.columns:
-                raise ValueError(f"Column '{node_order}' not found in GeoDataFrame")
-            order = gdf[node_order].values
-        elif callable(node_order):
-            try:
-                order = node_order(gdf)
-                if not isinstance(order, np.ndarray):
-                    raise TypeError("node_order function must return a numpy array")
-                if len(order) != len(gdf):
-                    raise ValueError(
-                        "node_order function must return an array of length equal to the GeoDataFrame"
-                    )
-                if not np.array_equal(np.sort(order), np.arange(len(gdf))):
-                    raise ValueError(
-                        "node_order function must return a permutation of indices"
-                    )
-            except Exception as e:
-                raise ValueError(f"Error in node_order function: {e!s}") from e
-        else:
-            raise TypeError("node_order must be a callable or a column name")
+    # Extract positions from the GeoDataFrame and reorder them.
+    if gdf.geometry.geom_type.iloc[0] == "Polygon":
+        positions = np.column_stack([gdf.geometry.centroid.x, gdf.geometry.centroid.y])[
+            order
+        ]
     else:
-        order = np.arange(len(gdf))
+        positions = np.column_stack([gdf.geometry.x, gdf.geometry.y])[order]
 
-    node_idx_ordered = np.argsort(order)
+    # Initialize the graph and create the seed network.
+    if len(gdf) < m:
+        raise ValueError(
+            f"Number of nodes ({len(gdf)}) must be at least m ({m}) for the seed network"
+        )
+    degree_centrality_array = np.zeros(len(gdf))
+    graph = nx.Graph()
+    seed_count = m
+    for i in range(seed_count):
+        node_id = id_values[i]
+        graph.add_node(node_id)
+    # Fully connect the seed nodes (subject to max_degree and constraint).
+    for i in range(seed_count):
+        for j in range(i + 1, seed_count):
+            if (
+                graph.degree(id_values[i]) >= max_degree
+                or graph.degree(id_values[j]) >= max_degree
+                or (
+                    constraint is not None
+                    and not constraint(gdf.iloc[order[i]], gdf.iloc[order[j]])
+                )
+            ):
+                continue
+            dx = positions[i, 0] - positions[j, 0]
+            dy = positions[i, 1] - positions[j, 1]
+            distance = (dx**2 + dy**2) ** 0.5
+            graph.add_edge(id_values[i], id_values[j], length=distance)
+            degree_centrality_array[i] += 1
+            degree_centrality_array[j] += 1
 
-    # Starting from the second node with index 1
-    for i, source_idx in tqdm(
-        enumerate(node_idx_ordered[1:], 1),
+    np_rng = np.random.default_rng(seed=random_state)
+
+    def spatial_factor(distances: np.array) -> np.array:
+        """Compute the geospatial decay factor for an array of distances."""
+        factors = np.ones_like(distances)
+        mask = distances >= (1 / scaling_factor)
+        factors[mask] = (distances[mask] * scaling_factor) ** (-a)
+        return factors
+
+    # Grow the network by adding one node at a time.
+    for new_idx in tqdm(
+        range(seed_count, len(gdf)),
         desc="Creating geo barabasi-albert network",
         disable=not verbose,
     ):
-        source_id = id_col_array[source_idx] if id_col else source_idx
-        if source_id not in graph:
-            graph.add_node(source_id)
+        new_node_id = id_values[new_idx]
+        new_node_pos = positions[new_idx]
+        new_node_data = gdf.iloc[order[new_idx]]
+        graph.add_node(new_node_id)
 
-        target_idx_array = node_idx_ordered[:i]
-        target_idx_mask = np.zeros(len(gdf), dtype=bool)
-        # Only consider nodes that have been added
-        target_idx_mask[target_idx_array] = True
-        # Only consider nodes with degree less than max_degree
-        target_idx_mask &= degree_centrality_array[target_idx_mask] < max_degree
-        # Only consider nodes that satisfy constraint
-        for target_idx in np.where(target_idx_mask)[0]:
-            if constraint is not None and not constraint(
-                gdf.iloc[source_idx], gdf.iloc[target_idx]
-            ):
-                target_idx_mask[target_idx] = False
-        target_idx_array = np.where(target_idx_mask)[0]
-
-        valid_target_positions = np.stack(
-            [pos_x_array[target_idx_mask], pos_y_array[target_idx_mask]], axis=1
-        )
-        distances = np.linalg.norm(
-            valid_target_positions - [pos_x_array[source_idx], pos_y_array[source_idx]],
-            axis=1,
-        )
-        distance_factors = np.where(
-            distances < 1 / scaling_factor, 1, (distances * scaling_factor) ** (-a)
-        )
-        k_array = degree_centrality_array[target_idx_mask]
-        # Avoid zero probabilities when degree is zero
-        k_array[k_array == 0] = 1
-        probs = k_array * distance_factors
-        if probs.sum() == 0:
-            warnings.warn(
-                f"Node {source_id} has no valid targets to connect to. "
-                f"Consider reducing constraints for this node:\n{gdf.iloc[source_idx].to_frame().T}",
-                UserWarning,
-                stacklevel=2,
+        max_degree_mask = degree_centrality_array[:new_idx] < max_degree
+        if constraint is not None:
+            constraint_mask = np.array(
+                [constraint(new_node_data, gdf.iloc[order[i]]) for i in range(new_idx)]
             )
-        elif probs.sum() < 1:
-            # Normalize probabilities
-            probs /= probs.sum()
+            candidate_node_idx = np.arange(new_idx)[max_degree_mask & constraint_mask]
+        else:
+            candidate_node_idx = np.arange(new_idx)[max_degree_mask]
+        if len(candidate_node_idx) == 0:
+            logger.warning(
+                f"Skipping attachment for new node {new_node_id}: no available nodes to attach to."
+            )
+            continue
 
-        # Decide whether to connect to each target
-        selected_targets = target_idx_array[np_rng.random(size=len(probs)) < probs]
-        # Make sure source node degree is less than max_degree
-        selected_targets = selected_targets[
-            : max_degree - degree_centrality_array[source_idx]
-        ]
+        # Compute the weight for each candidate node.
+        candidate_weights = (
+            degree_centrality_array[candidate_node_idx] + 1
+        ) * spatial_factor(
+            np.linalg.norm(positions[candidate_node_idx] - new_node_pos, axis=1)
+        )
+        candidate_weights /= candidate_weights.sum()
 
-        for j, target_idx in enumerate(selected_targets):
-            target_id = id_col_array[target_idx] if id_col else target_idx
-            graph.add_edge(source_id, target_id, length=distances[j])
-            degree_centrality_array[source_idx] += 1
-            degree_centrality_array[target_idx] += 1
+        # The new node will try to attach to m distinct existing nodes.
+        num_attachments = min(m, len(candidate_node_idx))
+        selected_indices = np_rng.choice(
+            candidate_node_idx, size=num_attachments, replace=False, p=candidate_weights
+        )
+
+        for idx in selected_indices:
+            target_node_id = id_values[idx]
+            distance = np.linalg.norm(new_node_pos - positions[idx])
+            if not graph.has_edge(new_node_id, target_node_id):
+                graph.add_edge(new_node_id, target_node_id, length=distance)
+                degree_centrality_array[new_idx] += 1
+                degree_centrality_array[idx] += 1
 
     _set_node_attributes(graph, gdf, id_col, node_attributes)
-
     total_edges = graph.number_of_edges()
     if total_edges == 0:
         warnings.warn(
@@ -238,8 +225,7 @@ def geo_barabasi_albert_network(
         )
     else:
         logger.debug(
-            f"Finished building geo barabasi-albert network with {total_edges:,} edges and {graph.number_of_nodes():,} nodes. "
-            f"Average degree: {total_edges * 2 / graph.number_of_nodes():.2f}"
+            f"Finished building geo Barabási-Albert network with {graph.number_of_nodes()} nodes and {graph.number_of_edges()} edges",
+            f"average degree: {total_edges * 2 / graph.number_of_nodes():.2f}",
         )
-
     return graph
