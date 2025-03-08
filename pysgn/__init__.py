@@ -14,14 +14,14 @@ from pysgn.ordering import (
 )
 
 __all__ = [
-    "geo_erdos_renyi_network",
-    "geo_watts_strogatz_network",
-    "geo_barabasi_albert_network",
-    "random_order",
     "attribute_order",
     "density_order",
-    "density_order_knn",
     "density_order_kde",
+    "density_order_knn",
+    "geo_barabasi_albert_network",
+    "geo_erdos_renyi_network",
+    "geo_watts_strogatz_network",
+    "random_order",
 ]
 
 __title__ = "pysgn"

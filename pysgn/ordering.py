@@ -12,6 +12,7 @@ def random_order(gdf: gpd.GeoDataFrame, random_state: int | None = None) -> np.n
 
     Parameters:
         gdf: GeoDataFrame containing nodes.
+
         random_state: Optional random seed for reproducibility.
 
     Returns:
@@ -28,12 +29,14 @@ def attribute_order(gdf: gpd.GeoDataFrame, by: str | list[str], **kwargs) -> np.
     Return an ordering of node indices based on one or more attribute columns.
 
     The GeoDataFrame is sorted by the specified column(s) in ascending order by default.
-    Additional keyword arguments are passed to [gdf.sort_values](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.sort_values.html).
+    Additional keyword arguments are passed to `gdf.sort_values <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.sort_values.html>`_.
 
     Parameters:
         gdf: GeoDataFrame containing nodes.
+
         by: A column name or list of column names to sort by.
-        **kwargs: Additional keyword arguments to pass to [gdf.sort_values](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.sort_values.html).
+
+        **kwargs: Additional keyword arguments to pass to `gdf.sort_values <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.sort_values.html>`_.
                   These can include 'ascending', 'na_position', 'ignore_index', etc.
 
     Returns:
@@ -54,12 +57,14 @@ def density_order_knn(gdf: gpd.GeoDataFrame, k: int = 5, **kwargs) -> np.ndarray
 
     The density is estimated as the average distance to the k nearest neighbors.
     Nodes with a lower average distance (i.e. higher density) will be ordered first.
-    Additional keyword arguments are passed to the KDTree query method: [KDTree.query](https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KDTree.html#sklearn.neighbors.KDTree.query).
+    Additional keyword arguments are passed to the KDTree query method: `KDTree.query <https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KDTree.html#sklearn.neighbors.KDTree.query>`_.
 
     Parameters:
         gdf: GeoDataFrame containing nodes.
+
         k: Number of nearest neighbors to consider (default 5).
-        **kwargs: Additional keyword arguments passed to [KDTree.query](https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KDTree.html#sklearn.neighbors.KDTree.query).
+
+        **kwargs: Additional keyword arguments passed to `KDTree.query <https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KDTree.html#sklearn.neighbors.KDTree.query>`_.
 
     Returns:
         np.ndarray: Array of indices representing the density ordering.
@@ -97,13 +102,16 @@ def density_order_kde(
     Return an ordering of node indices based on density estimated by Kernel Density Estimation (KDE).
 
     The density is estimated at each node position using KDE. Nodes with higher density estimates are ordered first.
-    Additional keyword arguments are passed to the KernelDensity constructor: [KernelDensity](https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KernelDensity.html).
+    Additional keyword arguments are passed to the KernelDensity constructor: `KernelDensity <https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KernelDensity.html>`_.
 
     Parameters:
         gdf: GeoDataFrame containing nodes.
+
         bandwidth: Bandwidth parameter for the KDE (default 1.0).
+
         kernel: The kernel to use in KDE (default "gaussian").
-        **kwargs: Additional keyword arguments passed to [KernelDensity](https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KernelDensity.html).
+
+        **kwargs: Additional keyword arguments passed to `KernelDensity <https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KernelDensity.html>`_.
 
     Returns:
         np.ndarray: Array of indices representing the density ordering.
@@ -136,9 +144,11 @@ def density_order(gdf: gpd.GeoDataFrame, method: str = "kde", **kwargs) -> np.nd
 
     Parameters:
         gdf: GeoDataFrame containing nodes.
+
         method: The density ordering method to use. Options are:
                 - "knn": Uses the average distance to k-nearest neighbors.
                 - "kde": Uses kernel density estimation.
+
         **kwargs: Additional keyword arguments passed to the selected density ordering function.
 
     Returns:

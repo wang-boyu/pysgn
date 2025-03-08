@@ -27,49 +27,67 @@ def geo_barabasi_albert_network(
 ) -> nx.Graph:
     r"""Construct a geo Barabási-Albert network with geospatial preferential attachment.
 
-    The geo Barabási-Albert (BA) model is a geospatial modification of the classical BA model,
+    The Geospatial Barabási-Albert (BA) model is a geospatial modification of the classical BA model,
     incorporating spatial factors into the preferential attachment mechanism. When adding a new node,
-    the probability of attaching to an existing node is proportional to the existing node's degree (plus
-    an initial attractiveness) and a geospatial decay function based on the distance between the nodes:
+    the probability of attaching to an existing node is proportional to the existing node's degree and
+    a geospatial decay function based on the distance between the nodes:
 
     .. math::
-        f(\textrm{distance}) =
-        \begin{cases}
-            1, & \text{if } \text{distance} < 1/\text{scaling\_factor} \\
-            (\text{distance} \times \text{scaling\_factor})^{-a}, & \text{otherwise.}
-        \end{cases}
+        p_i(\textrm{distance}|a, \textrm{min_dist}) \propto k_i \cdot \textrm{min}\left(1, \left(\frac{\textrm{distance}}{\textrm{min_dist}}\right) ^ {-a}\right)
 
-    Thus, when a new node is added, each existing node \\( j \\) is assigned a weight
+    where :math:`k_i` is the degree of existing node i, min_dist is the minimum distance between nodes,
+    and a is the distance decay exponent parameter, default is 3. The minimum distance is a threshold,
+    below which nodes are connected with probability 1, if an edge is chosen to be rewired. It is 1/20
+    of the bounding box diagonal by default. Users can set the scaling factor directly if needed, which
+    is the inverse of the minimum distance.
 
-    .. math::
-        w_j = (\text{degree}_j + 1) \times f(\text{distance}(i,j)),
+    The new node attaches to m different nodes chosen without replacement with these normalized
+    probabilities.
 
-    and the new node attaches to \\( m \\) different nodes chosen without replacement with probability proportional
-    to these weights.
-
-    For the first \\( m \\) nodes a complete (seed) network is created.
+    For the first m nodes, a seed network is created by fully connecting them. The seed network
+    is then used to grow the network by adding one node at a time.
 
     Args:
         gdf (gpd.GeoDataFrame): GeoDataFrame containing nodes.
 
     Keyword Args:
         m (int): Number of edges to attach from a new node to existing nodes (and size of the seed network), default is 2.
-        a (int): Distance decay exponent parameter, default is 3.
-        scaling_factor (float | None): Scaling factor (inverse of a minimum distance threshold). If None, it will be computed
-                                       from the bounding box of the GeoDataFrame.
-        max_degree (int): Maximum allowed degree for nodes, default is 150.
-        id_col (str | None): Column name containing unique IDs. If "index", the GeoDataFrame's index is used. If None,
-                             the positional index (after ordering) is used.
-        node_attributes (bool | str | list[str]): Which attributes to store on nodes. See the documentation of
-                                                    `_set_node_attributes`.
-        constraint (Callable | None): A function with signature ``constraint(u, v)`` returning True if nodes u and v may be connected.
-        node_order (Callable[[gpd.GeoDataFrame], np.ndarray] | str | None): A function or column name to determine the order
-                                      in which nodes are added. If None, nodes are added sequentially.
-        random_state (int | None): Random seed for reproducibility.
-        verbose (bool): If True, show progress messages.
+
+        a (int): distance decay exponent parameter, default is 3
+
+        scaling_factor (float): scaling factor is the inverse of the minimum distance between nodes, default is None.
+                                The minimum distance is a threshold, below which nodes are connected with probability 1,
+                                if an edge is chosen to be rewired.
+                                If None, the scaling factor will be calculated based on the bounding box of the GeoDataFrame.
+
+        max_degree (int): maximum degree centrality allowed, default is 150
+
+        id_col (str): column name containing unique IDs, default is None.
+                      If "index", the index of the GeoDataFrame will be used as the unique ID.
+                      If a column name, the values in the column will be used as the unique ID.
+                      If None, the positional index of the node will be used as the unique ID.
+
+        node_attributes (bool | str | list[str]): node attributes to save in the graph, default is True.
+                                                  If True, all attributes will be saved as node attributes.
+                                                  If False, only the position of the nodes will be saved as a `pos` attribute.
+                                                  If a string or a list of strings, the attributes will be saved as node attributes.
+
+        constraint (Callable | None): constraint function to filter out invalid neighbors, default is None
+                                      Example: constraint=lambda u, v: u.household != v.household
+                                      This will ensure that nodes from the same household are not connected.
+
+        node_order (Callable[[gpd.GeoDataFrame], np.ndarray] | str | None): A function or column name to determine the order in which nodes are added.
+                                                                            If None, nodes are added sequentially as they appear in the GeoDataFrame.
+                                                                            If a callable, the function should take a GeoDataFrame and return an array of indices.
+                                                                            If a string, the string is interpreted as a column name that contains order indices.
+
+        random_state (int | None): random seed for reproducibility, default is None.
+
+        verbose (bool): whether to show detailed progress messages, default is False
+
 
     Returns:
-        nx.Graph: A geo Barabási-Albert network.
+        nx.Graph: a geo barabasi-albert network graph
     """
     # Set logger level based on verbose flag
     logger.remove()
