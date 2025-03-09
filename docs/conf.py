@@ -40,7 +40,7 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.ifconfig",
     "sphinx.ext.viewcode",
-    "myst_nb"
+    "myst_nb",
 ]
 
 # "dollarmath" for parsing of dollar $ and $$ encapsulated math
@@ -259,9 +259,7 @@ latex_documents = [
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [
-    ("index", "pysgn", "PySGN Documentation", ["Wang Boyu"], 1)
-]
+man_pages = [("index", "pysgn", "PySGN Documentation", ["Wang Boyu"], 1)]
 
 # If true, show URL addresses after external links.
 # man_show_urls = False
@@ -297,4 +295,4 @@ texinfo_documents = [
 
 
 # Example configuration for intersphinx: refer to the Python standard library.
-intersphinx_mapping = {'python': ('https://docs.python.org/3', None)}
+intersphinx_mapping = {"python": ("https://docs.python.org/3", None)}

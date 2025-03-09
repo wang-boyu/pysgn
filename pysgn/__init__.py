@@ -2,12 +2,26 @@
 
 import datetime
 
+from pysgn.geo_barabasi_albert_network import geo_barabasi_albert_network
 from pysgn.geo_erdos_renyi_network import geo_erdos_renyi_network
 from pysgn.geo_watts_strogatz_network import geo_watts_strogatz_network
+from pysgn.ordering import (
+    attribute_order,
+    density_order,
+    density_order_kde,
+    density_order_knn,
+    random_order,
+)
 
 __all__ = [
+    "attribute_order",
+    "density_order",
+    "density_order_kde",
+    "density_order_knn",
+    "geo_barabasi_albert_network",
     "geo_erdos_renyi_network",
     "geo_watts_strogatz_network",
+    "random_order",
 ]
 
 __title__ = "pysgn"

@@ -68,7 +68,7 @@ def geo_erdos_renyi_network(
         verbose (bool): whether to show detailed progress messages, default is False
 
     Returns:
-        nx.Graph: a geo erdos-renyi network graph with average degree k, maximum degree max_degree
+        nx.Graph: a geo erdos-renyi network graph
     """
     # Set logger level based on verbose flag
     logger.remove()

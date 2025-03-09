@@ -19,9 +19,9 @@ def test_create_k_col_odd_integer():
     n = 10
     result = _create_k_col(k, n, random_state=42)
     assert np.all(np.isin(result, [k // 2, k // 2 + 1])), "Failed on odd integer k"
-    assert np.isclose(
-        result.mean(), k / 2, atol=0.1
-    ), "Mean not as expected for odd integer k"
+    assert np.isclose(result.mean(), k / 2, atol=0.1), (
+        "Mean not as expected for odd integer k"
+    )
 
 
 def test_create_k_col_float():
@@ -32,9 +32,9 @@ def test_create_k_col_float():
     lower = int(np.floor(k / 2))
     upper = int(np.ceil(k / 2))
     assert np.all(np.isin(result, [lower, upper])), "Failed on float k"
-    assert np.isclose(
-        result.mean(), k / 2, atol=0.1
-    ), "Mean not as expected for float k"
+    assert np.isclose(result.mean(), k / 2, atol=0.1), (
+        "Mean not as expected for float k"
+    )
 
 
 def test_create_k_col_invalid_k():
@@ -52,6 +52,6 @@ def test_create_k_col_reproducibility():
     random_state = 42
     result1 = _create_k_col(k, n, random_state=random_state)
     result2 = _create_k_col(k, n, random_state=random_state)
-    assert np.array_equal(
-        result1, result2
-    ), "Results are not reproducible with the same random state"
+    assert np.array_equal(result1, result2), (
+        "Results are not reproducible with the same random state"
+    )
