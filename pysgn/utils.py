@@ -3,6 +3,29 @@ import numpy as np
 from loguru import logger
 
 
+def _compute_probabilities(
+    distances: np.ndarray, a: int, scaling_factor: float
+) -> np.ndarray:
+    """
+    Compute the probability of connecting two nodes based on their distance.
+
+    The probability is calculated as:
+    p(distance) = min(1, (distance * scaling_factor) ^ (-a))
+
+    p = 1 if distance < 1 / scaling_factor
+    p = (distance * scaling_factor) ^ (-a) if distance >= 1 / scaling_factor
+
+    Args:
+        distances: An array of distances between nodes.
+        a: The distance decay exponent parameter.
+        scaling_factor: The inverse of the minimum distance between nodes.
+    """
+    factors = np.ones_like(distances)
+    mask = distances >= (1 / scaling_factor)
+    factors[mask] = (distances[mask] * scaling_factor) ** (-a)
+    return factors
+
+
 def _create_k_col(k, n, random_state=None) -> np.ndarray:
     """
     Creates a column of integer degree centrality so that its mean is equal to k/2.

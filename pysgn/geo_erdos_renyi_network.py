@@ -8,7 +8,7 @@ import pandas as pd
 from loguru import logger
 from tqdm.auto import tqdm
 
-from .utils import _find_scaling_factor, _set_node_attributes
+from .utils import _compute_probabilities, _find_scaling_factor, _set_node_attributes
 
 
 def geo_erdos_renyi_network(
@@ -91,63 +91,71 @@ def geo_erdos_renyi_network(
         id_col_array = gdf.index.values if id_col == "index" else gdf[id_col].values
         if len(np.unique(id_col_array)) != len(id_col_array):
             raise ValueError("ID column must contain unique values")
+    else:
+        id_col_array = np.arange(len(gdf))
 
-    graph = nx.Graph()
     # use centroid if geometry is a polygon
     if gdf.geometry.geom_type.iloc[0] == "Polygon":
-        pos_x_array = gdf.geometry.centroid.x.values
-        pos_y_array = gdf.geometry.centroid.y.values
+        positions = np.column_stack(
+            [gdf.geometry.centroid.x.values, gdf.geometry.centroid.y.values]
+        )
     else:
-        pos_x_array = gdf.geometry.x.values
-        pos_y_array = gdf.geometry.y.values
+        positions = np.column_stack([gdf.geometry.x.values, gdf.geometry.y.values])
 
     if scaling_factor is None:
         scaling_factor = _find_scaling_factor(gdf)
     np_rng = np.random.default_rng(seed=random_state)
     degree_centrality_array = np.zeros(len(gdf))
+    graph = nx.Graph()
     for this_node_idx in tqdm(
         range(len(gdf)), desc="Creating geo erdos-renyi network", disable=not verbose
     ):
-        this_node_graph_id = id_col_array[this_node_idx] if id_col else this_node_idx
+        if degree_centrality_array[this_node_idx] >= max_degree:
+            continue
+        this_node_graph_id = id_col_array[this_node_idx]
         if this_node_graph_id not in graph:
             graph.add_node(this_node_graph_id)
-        for that_node_idx in range(len(gdf)):
-            that_node_graph_id = (
-                id_col_array[that_node_idx] if id_col else that_node_idx
+
+        candidate_node_idx = np.arange(len(gdf))
+        # avoid self-loops
+        candidate_node_mask = candidate_node_idx != this_node_idx
+        # check if the maximum degree centrality has been reached
+        candidate_node_mask &= degree_centrality_array < max_degree
+        if constraint is not None:
+            constraint_mask = np.array(
+                [
+                    constraint(gdf.iloc[this_node_idx], gdf.iloc[i])
+                    for i in range(len(gdf))
+                ]
             )
+            candidate_node_mask &= constraint_mask
+        candidate_node_idx = candidate_node_idx[candidate_node_mask]
+
+        if len(candidate_node_idx) == 0:
+            logger.warning(
+                f"No valid nodes to connect for node {this_node_graph_id}. Try adjusting the parameters."
+            )
+            continue
+        # compute probabilities of connecting to other nodes
+        distances = np.linalg.norm(
+            positions[this_node_idx] - positions[candidate_node_idx], axis=1
+        )
+        q = _compute_probabilities(distances, a=a, scaling_factor=scaling_factor)
+        # for each possible edge, decide whether to connect or not
+        selected = np_rng.random(size=len(candidate_node_idx)) < q
+        for i, that_node_idx in enumerate(candidate_node_idx[selected]):
+            # avoid exceeding the maximum degree centrality
+            if degree_centrality_array[this_node_idx] >= max_degree:
+                break
+            that_node_graph_id = id_col_array[that_node_idx]
+            # avoid multiple edges
+            if graph.has_edge(this_node_graph_id, that_node_graph_id):
+                continue
             if that_node_graph_id not in graph:
                 graph.add_node(that_node_graph_id)
-            # Enforce no self-loops, or multiple edges, or degree >= max_degree, or constraint
-            if (
-                that_node_graph_id == this_node_idx
-                or graph.has_edge(this_node_graph_id, that_node_graph_id)
-                or degree_centrality_array[this_node_idx] >= max_degree
-                or degree_centrality_array[that_node_idx] >= max_degree
-                or (
-                    constraint is not None
-                    and not constraint(gdf.iloc[this_node_idx], gdf.iloc[that_node_idx])
-                )
-            ):
-                continue
-
-            distance = (
-                float(pos_x_array[this_node_idx] - pos_x_array[that_node_idx]) ** 2
-                + (float(pos_y_array[this_node_idx] - pos_y_array[that_node_idx]) ** 2)
-            ) ** 0.5
-            # if distance is less than minimum distance, connect with probability 1
-            # minimum distance is determined by method _find_scaling_factor
-            if distance < 1 / scaling_factor:
-                q = 1
-            # else, connect with probability (distance / min_dist) ^ (-a)
-            # where min_dist is the minimum distance
-            # and a is the distance decay parameter
-            else:
-                q = (distance * scaling_factor) ** (-a)
-
-            if np_rng.random() < q:
-                graph.add_edge(this_node_graph_id, that_node_graph_id, length=distance)
-                degree_centrality_array[this_node_idx] += 1
-                degree_centrality_array[that_node_idx] += 1
+            graph.add_edge(this_node_graph_id, that_node_graph_id, length=distances[i])
+            degree_centrality_array[this_node_idx] += 1
+            degree_centrality_array[that_node_idx] += 1
 
     _set_node_attributes(graph, gdf, id_col, node_attributes)
     total_edges = graph.number_of_edges()

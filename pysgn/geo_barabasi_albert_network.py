@@ -8,7 +8,7 @@ import pandas as pd
 from loguru import logger
 from tqdm.auto import tqdm
 
-from .utils import _find_scaling_factor, _set_node_attributes
+from .utils import _compute_probabilities, _find_scaling_factor, _set_node_attributes
 
 
 def geo_barabasi_albert_network(
@@ -179,13 +179,6 @@ def geo_barabasi_albert_network(
 
     np_rng = np.random.default_rng(seed=random_state)
 
-    def spatial_factor(distances: np.array) -> np.array:
-        """Compute the geospatial decay factor for an array of distances."""
-        factors = np.ones_like(distances)
-        mask = distances >= (1 / scaling_factor)
-        factors[mask] = (distances[mask] * scaling_factor) ** (-a)
-        return factors
-
     # Grow the network by adding one node at a time.
     for new_idx in tqdm(
         range(seed_count, len(gdf)),
@@ -214,8 +207,10 @@ def geo_barabasi_albert_network(
         # Compute the weight for each candidate node.
         candidate_weights = (
             degree_centrality_array[candidate_node_idx] + 1
-        ) * spatial_factor(
-            np.linalg.norm(positions[candidate_node_idx] - new_node_pos, axis=1)
+        ) * _compute_probabilities(
+            np.linalg.norm(positions[candidate_node_idx] - new_node_pos, axis=1),
+            a=a,
+            scaling_factor=scaling_factor,
         )
         candidate_weights /= candidate_weights.sum()
 
