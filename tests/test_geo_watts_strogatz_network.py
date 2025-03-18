@@ -228,8 +228,6 @@ def test_rewiring_probability(point_gdf: gpd.GeoDataFrame) -> None:
 
     # The maximum distance in G2 should be greater than in G1
     # This indicates the presence of long-range connections
-    print(distances_g1)
-    print(distances_g2)
     assert max(distances_g2) > max(distances_g1)
 
 

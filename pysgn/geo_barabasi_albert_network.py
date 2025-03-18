@@ -13,8 +13,8 @@ from .utils import _find_scaling_factor, _set_node_attributes
 
 def geo_barabasi_albert_network(
     gdf,
+    m: int,
     *,
-    m: int = 2,
     a: int = 3,
     scaling_factor: float | None = None,
     max_degree: int = 150,
@@ -50,9 +50,9 @@ def geo_barabasi_albert_network(
     Args:
         gdf (gpd.GeoDataFrame): GeoDataFrame containing nodes.
 
-    Keyword Args:
-        m (int): Number of edges to attach from a new node to existing nodes (and size of the seed network), default is 2.
+        m (int): Number of edges to attach from a new node to existing nodes (and size of the seed network).
 
+    Keyword Args:
         a (int): distance decay exponent parameter, default is 3
 
         scaling_factor (float): scaling factor is the inverse of the minimum distance between nodes, default is None.
