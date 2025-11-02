@@ -8,6 +8,7 @@ import pytest
 from shapely.geometry import Point, Polygon
 
 from pysgn.geo_barabasi_albert_network import geo_barabasi_albert_network
+from pysgn.ordering import attribute_order, density_order_knn, random_order
 
 
 @pytest.fixture
@@ -170,24 +171,16 @@ def test_ordering_function_usage(point_gdf: gpd.GeoDataFrame) -> None:
 
     This test uses ordering functions from the ordering module to change the node addition order.
     """
-    # Using a random order ordering function.
-    from pysgn.ordering import random_order
 
     g_random = geo_barabasi_albert_network(
         point_gdf, m=2, node_order=random_order, random_state=42
     )
     assert isinstance(g_random, nx.Graph)
 
-    # Using an attribute order ordering function (ordering by "expected_degree").
-    from pysgn.ordering import attribute_order
-
     g_attr = geo_barabasi_albert_network(
         point_gdf, m=2, node_order=lambda gdf: attribute_order(gdf, "expected_degree")
     )
     assert isinstance(g_attr, nx.Graph)
-
-    # Using a density ordering function based on k-nearest neighbors.
-    from pysgn.ordering import density_order_knn
 
     g_density = geo_barabasi_albert_network(
         point_gdf, m=2, node_order=lambda gdf: density_order_knn(gdf, k=5)

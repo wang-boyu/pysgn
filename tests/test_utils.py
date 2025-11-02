@@ -41,7 +41,7 @@ def test_create_k_col_invalid_k():
     """Test _create_k_col with an invalid k."""
     k = "invalid"
     n = 10
-    with pytest.raises(ValueError, match="k must be an integer or a float."):
+    with pytest.raises(ValueError, match=r"k must be an integer or a float."):
         _create_k_col(k, n)
 
 

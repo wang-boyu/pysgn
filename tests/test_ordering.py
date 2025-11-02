@@ -113,7 +113,7 @@ def test_density_order_invalid_method(point_gdf: GeoDataFrame) -> None:
     """
     with pytest.raises(
         ValueError,
-        match="Unknown density ordering method: invalid. Use 'knn' or 'kde'.",
+        match=r"Unknown density ordering method: invalid. Use 'knn' or 'kde'.",
     ):
         density_order(point_gdf, method="invalid")
 
