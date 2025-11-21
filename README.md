@@ -1,6 +1,6 @@
 # PySGN: A Python package for constructing synthetic geospatial networks
 
-[![GitHub CI](https://github.com/wang-boyu/pysgn/actions/workflows/build.yml/badge.svg)](https://github.com/wang-boyu/pysgn/actions) [![Read the Docs](https://readthedocs.org/projects/pysgn/badge/?version=stable)](https://pysgn.readthedocs.io/stable) [![Codecov](https://codecov.io/gh/wang-boyu/pysgn/branch/main/graph/badge.svg)](https://codecov.io/gh/wang-boyu/pysgn) [![PyPI](https://img.shields.io/pypi/v/pysgn.svg)](https://pypi.org/project/pysgn) [![PyPI - License](https://img.shields.io/pypi/l/pysgn)](https://pypi.org/project/pysgn/) [![DOI](https://zenodo.org/badge/DOI/10.3847/xxxxx.svg)](https://doi.org/10.3847/xxxxx)
+[![GitHub CI](https://github.com/wang-boyu/pysgn/actions/workflows/build.yml/badge.svg)](https://github.com/wang-boyu/pysgn/actions) [![Read the Docs](https://readthedocs.org/projects/pysgn/badge/?version=stable)](https://pysgn.readthedocs.io/en/stable) [![Codecov](https://codecov.io/gh/wang-boyu/pysgn/branch/main/graph/badge.svg)](https://codecov.io/gh/wang-boyu/pysgn) [![PyPI](https://img.shields.io/pypi/v/pysgn.svg)](https://pypi.org/project/pysgn) [![PyPI - License](https://img.shields.io/pypi/l/pysgn)](https://pypi.org/project/pysgn/)
 
 
 ## Introduction
@@ -13,6 +13,18 @@ PySGN can be installed using pip:
 
 ```bash
 pip install pysgn
+```
+
+If you plan to run the Getting Started notebook `docs/getting_started.ipynb` (or build the documentation) locally, install the optional `docs` extras to get the other dependencies such as Jupyter and Sphinx:
+
+```bash
+pip install "pysgn[docs]"
+```
+
+When working from a clone of this repository, you can install the same extras in editable mode:
+
+```bash
+pip install -e ".[docs]"
 ```
 
 ## Usage Example
@@ -89,7 +101,7 @@ print(f"Number of edges: {graph.number_of_edges()}")
 
 ## Documentation
 
-For more information on how to use PySGN, please refer to the [documentation](https://pysgn.readthedocs.io/).
+For more information on how to use PySGN, please refer to the [documentation](https://pysgn.readthedocs.io/en/stable).
 
 ## Contributing
 
