@@ -165,3 +165,14 @@ def test_index_as_id(point_gdf: gpd.GeoDataFrame) -> None:
     )
     with pytest.raises(ValueError, match="Multi-index is not supported"):
         geo_erdos_renyi_network(multi_gdf, id_col="index")
+
+
+def test_no_edges_created_warning(point_gdf: gpd.GeoDataFrame) -> None:
+    """Trigger the 'No edges were created' warning in geo_erdos_renyi_network."""
+
+    tiny = point_gdf.head(4).copy()
+    with pytest.warns(UserWarning, match="No edges were created"):
+        g = geo_erdos_renyi_network(
+            tiny, max_degree=0, scaling_factor=1e-6, random_state=0
+        )
+        assert g.number_of_edges() == 0
