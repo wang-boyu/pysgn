@@ -3,6 +3,7 @@ from typing import Any
 
 import geopandas as gpd
 import networkx as nx
+import numpy as np
 import pandas as pd
 import pytest
 from shapely.geometry import Point, Polygon
@@ -186,3 +187,60 @@ def test_ordering_function_usage(point_gdf: gpd.GeoDataFrame) -> None:
         point_gdf, m=2, node_order=lambda gdf: density_order_knn(gdf, k=5)
     )
     assert isinstance(g_density, nx.Graph)
+
+
+def test_node_order_column_name(point_gdf: gpd.GeoDataFrame) -> None:
+    """Ensure string-based node ordering columns are respected."""
+
+    ordered_gdf = point_gdf.head(10).copy()
+    ordered_gdf["custom_order"] = list(reversed(range(len(ordered_gdf))))
+
+    g = geo_barabasi_albert_network(
+        ordered_gdf, m=2, node_order="custom_order", random_state=0
+    )
+    assert isinstance(g, nx.Graph)
+
+
+def test_node_order_missing_column(point_gdf: gpd.GeoDataFrame) -> None:
+    """Expect a ValueError when node_order references a missing column."""
+
+    with pytest.raises(
+        ValueError,
+        match="Column 'does_not_exist' was not found in the provided GeoDataFrame",
+    ):
+        geo_barabasi_albert_network(point_gdf, m=2, node_order="does_not_exist")
+
+
+def test_m_greater_than_number_of_nodes(point_gdf: gpd.GeoDataFrame) -> None:
+    """Ensure specifying m larger than available nodes raises ValueError."""
+
+    tiny = point_gdf.head(3).copy()
+    with pytest.raises(
+        ValueError,
+        match=r"Number of nodes \(3\) must be at least m \(4\)",
+    ):
+        geo_barabasi_albert_network(tiny, m=4)
+
+
+def test_no_edges_created_warning(point_gdf: gpd.GeoDataFrame) -> None:
+    """Trigger the 'No edges were created' warning in geo_barabasi_albert_network."""
+
+    tiny = point_gdf.head(4).copy()
+    with pytest.warns(UserWarning, match="No edges were created"):
+        g = geo_barabasi_albert_network(
+            tiny, m=2, max_degree=0, scaling_factor=1e-6, random_state=0
+        )
+        assert g.number_of_edges() == 0
+
+
+def test_node_order_incorrect_length(point_gdf: gpd.GeoDataFrame) -> None:
+    """Expect ValueError when node_order returns indices of incorrect length."""
+
+    def bad_order(gdf):
+        return np.arange(len(gdf) - 1)
+
+    with pytest.raises(
+        ValueError,
+        match="The node_order must return an array of indices of the same length as gdf",
+    ):
+        geo_barabasi_albert_network(point_gdf, m=2, node_order=bad_order)

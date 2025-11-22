@@ -111,6 +111,10 @@ def geo_barabasi_albert_network(
         order = node_order(gdf)
     elif isinstance(node_order, str):
         # Interpret the string as a column name that contains order indices.
+        if node_order not in gdf.columns:
+            raise ValueError(
+                f"Column '{node_order}' was not found in the provided GeoDataFrame"
+            )
         order = np.argsort(gdf[node_order].values)
     else:
         raise ValueError(
