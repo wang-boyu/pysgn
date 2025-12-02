@@ -15,7 +15,7 @@ PySGN can be installed using pip:
 pip install pysgn
 ```
 
-If you plan to run the Getting Started notebook `docs/getting_started.ipynb` (or build the documentation) locally, install the optional `docs` extras to get the other dependencies such as Jupyter and Sphinx:
+If you plan to run the code snippets below or the Getting Started notebook `docs/getting_started.ipynb` locally, install the optional `docs` extras to get the other dependencies such as geodatasets, Jupyter and Sphinx:
 
 ```bash
 pip install "pysgn[docs]"
@@ -33,12 +33,21 @@ pip install -e ".[docs]"
 
 Here's a simple example of how to use the `geo_erdos_renyi_network` function to create a geospatial Erdős-Rényi network. It generates a network where each pair of nodes is connected with probability `p`, which depends on the spatial distance between the nodes. The parameter `a` controls the rate of decay of the connection probability with distance.
 
+All PySGN functions expect the input GeoDataFrame to contain a single geometry type (Points or Polygons).
+
 ```python
+import geodatasets
 import geopandas as gpd
 from pysgn import geo_erdos_renyi_network
 
-# Load your geospatial data into a GeoDataFrame
-gdf = gpd.read_file('path/to/your/geospatial_data.shp')
+# Load the sample grocery-store points from geodatasets
+# and explode the GeoDataFrame into single points (one point per row).
+gdf = (
+    gpd.read_file(geodatasets.get_path("geoda.groceries"))
+    .explode(index_parts=False)
+    .reset_index(drop=True)
+    .to_crs("EPSG:26971")
+)
 
 # Create a geospatial Erdős-Rényi network
 graph = geo_erdos_renyi_network(gdf, a=3)
@@ -53,11 +62,16 @@ print(f"Number of edges: {graph.number_of_edges()}")
 Similarly you can use the `geo_watts_strogatz_network` function to create a geospatial Watts-Strogatz network. It first creates a network where each node is connected to its `k` nearest neighbors. Then, it rewires each edge with probability `p`. If an edge is chosen to be rewired, it is replaced with a new edge to a random node, where the probability of connecting to this new node is inversely proportional to the spatial distance.
 
 ```python
+import geodatasets
 import geopandas as gpd
 from pysgn import geo_watts_strogatz_network
 
-# Load your geospatial data into a GeoDataFrame
-gdf = gpd.read_file('path/to/your/geospatial_data.shp')
+gdf = (
+    gpd.read_file(geodatasets.get_path("geoda.groceries"))
+    .explode(index_parts=False)
+    .reset_index(drop=True)
+    .to_crs("EPSG:26971")
+)
 
 # Create a geospatial Watts-Strogatz network
 graph = geo_watts_strogatz_network(
@@ -77,12 +91,17 @@ print(f"Number of edges: {graph.number_of_edges()}")
 You can also use the `geo_barabasi_albert_network` function to create a geospatial Barabási-Albert network. It creates a network using geospatial preferential attachment, where the probability of connecting to existing nodes depends on both their degrees and the spatial distances.
 
 ```python
+import geodatasets
 import geopandas as gpd
 from pysgn import geo_barabasi_albert_network
 from pysgn.ordering import density_order
 
-# Load your geospatial data into a GeoDataFrame
-gdf = gpd.read_file('path/to/your/geospatial_data.shp')
+gdf = (
+    gpd.read_file(geodatasets.get_path("geoda.groceries"))
+    .explode(index_parts=False)
+    .reset_index(drop=True)
+    .to_crs("EPSG:26971")
+)
 
 # Create a geospatial Barabási-Albert network
 graph = geo_barabasi_albert_network(
