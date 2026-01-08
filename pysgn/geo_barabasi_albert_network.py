@@ -103,6 +103,12 @@ def geo_barabasi_albert_network(
             UserWarning,
             stacklevel=2,
         )
+    if gdf.crs is None:
+        warnings.warn(
+            "Input GeoDataFrame has no CRS; storing crs=None. Downstream exports will produce GeoDataFrames with an undefined coordinate reference system.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     # Determine node addition order.
     if node_order is None:
@@ -158,6 +164,8 @@ def geo_barabasi_albert_network(
         )
     degree_centrality_array = np.zeros(len(gdf))
     graph = nx.Graph()
+    graph.graph["crs"] = gdf.crs
+    graph.graph["id_col"] = id_col if id_col is not None else "index"
     seed_count = m
     for i in range(seed_count):
         node_id = id_values[i]
