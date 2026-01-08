@@ -85,6 +85,12 @@ def geo_erdos_renyi_network(
             UserWarning,
             stacklevel=2,
         )
+    if gdf.crs is None:
+        warnings.warn(
+            "Input GeoDataFrame has no CRS; storing crs=None. Downstream exports will produce GeoDataFrames with an undefined coordinate reference system.",
+            UserWarning,
+            stacklevel=2,
+        )
     if id_col is not None:
         if id_col == "index" and isinstance(gdf.index, pd.MultiIndex):
             raise ValueError("Multi-index is not supported")
@@ -107,6 +113,8 @@ def geo_erdos_renyi_network(
     np_rng = np.random.default_rng(seed=random_state)
     degree_centrality_array = np.zeros(len(gdf))
     graph = nx.Graph()
+    graph.graph["crs"] = gdf.crs
+    graph.graph["id_col"] = id_col if id_col is not None else "index"
     for this_node_idx in tqdm(
         range(len(gdf)), desc="Creating geo erdos-renyi network", disable=not verbose
     ):
