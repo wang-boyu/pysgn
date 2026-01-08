@@ -1,6 +1,15 @@
+from __future__ import annotations
+
+import warnings
+from typing import Any
+
+import geopandas as gpd
 import networkx as nx
 import numpy as np
+import pandas as pd
 from loguru import logger
+from shapely.geometry import LineString, Point
+from shapely.geometry.base import BaseGeometry
 
 
 def _compute_probabilities(
@@ -76,6 +85,21 @@ def _find_scaling_factor(gdf) -> float:
     return 1 / min_dist
 
 
+def _get_id_col_array(gdf: gpd.GeoDataFrame, id_col: str | None) -> np.ndarray:
+    """Return node id values based on id_col settings."""
+    if id_col is None:
+        return np.arange(len(gdf))
+    if id_col == "index":
+        if isinstance(gdf.index, pd.MultiIndex):
+            raise ValueError("Multi-index is not supported")
+        id_values = gdf.index.values
+    else:
+        id_values = gdf[id_col].values
+    if len(np.unique(id_values)) != len(id_values):
+        raise ValueError("ID column must contain unique values")
+    return id_values
+
+
 def _set_node_attributes(graph, gdf, id_col, node_attributes):
     if gdf.geometry.geom_type.iloc[0] == "Polygon":
         pos_x_array = gdf.geometry.centroid.x.values
@@ -124,3 +148,121 @@ def _set_node_attributes(graph, gdf, id_col, node_attributes):
                     },
                     name=attribute,
                 )
+
+
+def graph_to_gdf(
+    graph: nx.Graph,
+    *,
+    nodes: bool = True,
+    edges: bool = True,
+) -> tuple[gpd.GeoDataFrame | None, gpd.GeoDataFrame | None]:
+    """Convert a geospatial NetworkX graph into node and edge GeoDataFrames.
+
+    This function reconstructs node and edge GeoDataFrames from a graph that
+    stores geospatial attributes. Node geometry is taken from the stored
+    geometry attribute when available, otherwise it falls back to a Point
+    created from the ``pos`` coordinates. Edge geometry uses a stored shapely
+    geometry when present; otherwise it is built as a straight LineString
+    between endpoint positions or centroids. CRS metadata is read from
+    ``graph.graph["crs"]`` and applied to outputs when present.
+
+    Args:
+        graph: Graph containing geospatial node/edge attributes.
+        nodes: Whether to build the node GeoDataFrame.
+        edges: Whether to build the edge GeoDataFrame.
+
+    Returns:
+        A tuple of ``(nodes_gdf, edges_gdf)`` with ``None`` for any layer not
+        requested.
+
+    Raises:
+        ValueError: If both ``nodes`` and ``edges`` are ``False``.
+        RuntimeError: If geometry cannot be reconstructed for a node or edge.
+    """
+    if not nodes and not edges:
+        raise ValueError(
+            "At least one layer must be requested; set nodes=True or edges=True (received nodes=False, edges=False)."
+        )
+
+    id_col = graph.graph.get("id_col")
+    index_name = graph.graph.get("index_name")
+    crs = graph.graph.get("crs")
+
+    if crs is None:
+        warnings.warn(
+            "Graph has no CRS; output GeoDataFrames will have an undefined coordinate reference system.",
+            UserWarning,
+            stacklevel=2,
+        )
+
+    nodes_gdf: gpd.GeoDataFrame | None = None
+    edges_gdf: gpd.GeoDataFrame | None = None
+
+    if nodes:
+        node_records: list[dict[str, Any]] = []
+        node_ids: list[Any] = []
+        for node_id, attrs in graph.nodes(data=True):
+            record = dict(attrs)
+            geometry = _node_geometry_from_attrs(node_id, attrs)
+            record["geometry"] = geometry
+            node_records.append(record)
+            node_ids.append(node_id)
+
+        node_df = pd.DataFrame.from_records(node_records)
+        nodes_gdf = gpd.GeoDataFrame(node_df, geometry="geometry", crs=crs)
+
+        if id_col == "index":
+            nodes_gdf.index = pd.Index(node_ids, name=index_name)
+        elif isinstance(id_col, str):
+            nodes_gdf[id_col] = node_ids
+        elif id_col is None:
+            nodes_gdf.index = pd.Index(node_ids)
+
+    if edges:
+        edge_records: list[dict[str, Any]] = []
+        for u, v, data in graph.edges(data=True):
+            record = {"source": u, "target": v, **data}
+            geometry = data.get("geometry")
+            if geometry is None or not isinstance(geometry, BaseGeometry):
+                geometry = _edge_geometry_from_nodes(graph, u, v)
+            record["geometry"] = geometry
+            edge_records.append(record)
+
+        edge_df = pd.DataFrame.from_records(edge_records)
+        edges_gdf = gpd.GeoDataFrame(edge_df, geometry="geometry", crs=crs)
+
+    return nodes_gdf, edges_gdf
+
+
+def _node_geometry_from_attrs(node_id: Any, attrs: dict[str, Any]):
+    if attrs.get("geometry") is not None:
+        return attrs["geometry"]
+    if attrs.get("pos") is not None:
+        x, y = attrs["pos"]
+        return Point(x, y)
+    raise RuntimeError(
+        f"Cannot reconstruct geometry for node {node_id}; expected 'geometry' or 'pos' attributes."
+    )
+
+
+def _edge_geometry_from_nodes(graph: nx.Graph, u: Any, v: Any) -> LineString:
+    source_point = _node_point(graph, u)
+    target_point = _node_point(graph, v)
+    return LineString(
+        [(source_point.x, source_point.y), (target_point.x, target_point.y)]
+    )
+
+
+def _node_point(graph: nx.Graph, node_id: Any) -> Point:
+    attrs = graph.nodes[node_id]
+    if attrs.get("geometry") is not None:
+        geom = attrs["geometry"]
+        if hasattr(geom, "centroid"):
+            centroid = geom.centroid
+            return Point(centroid.x, centroid.y)
+    if attrs.get("pos") is not None:
+        x, y = attrs["pos"]
+        return Point(x, y)
+    raise RuntimeError(
+        f"Cannot reconstruct geometry for edge endpoint {node_id}; missing 'geometry' or 'pos' on node."
+    )

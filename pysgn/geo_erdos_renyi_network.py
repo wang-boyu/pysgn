@@ -4,11 +4,15 @@ from collections.abc import Callable
 
 import networkx as nx
 import numpy as np
-import pandas as pd
 from loguru import logger
 from tqdm.auto import tqdm
 
-from .utils import _compute_probabilities, _find_scaling_factor, _set_node_attributes
+from .utils import (
+    _compute_probabilities,
+    _find_scaling_factor,
+    _get_id_col_array,
+    _set_node_attributes,
+)
 
 
 def geo_erdos_renyi_network(
@@ -91,14 +95,7 @@ def geo_erdos_renyi_network(
             UserWarning,
             stacklevel=2,
         )
-    if id_col is not None:
-        if id_col == "index" and isinstance(gdf.index, pd.MultiIndex):
-            raise ValueError("Multi-index is not supported")
-        id_col_array = gdf.index.values if id_col == "index" else gdf[id_col].values
-        if len(np.unique(id_col_array)) != len(id_col_array):
-            raise ValueError("ID column must contain unique values")
-    else:
-        id_col_array = np.arange(len(gdf))
+    id_col_array = _get_id_col_array(gdf, id_col)
 
     # use centroid if geometry is a polygon
     if gdf.geometry.geom_type.iloc[0] == "Polygon":
@@ -114,7 +111,11 @@ def geo_erdos_renyi_network(
     degree_centrality_array = np.zeros(len(gdf))
     graph = nx.Graph()
     graph.graph["crs"] = gdf.crs
-    graph.graph["id_col"] = id_col if id_col is not None else "index"
+    if id_col == "index":
+        graph.graph["id_col"] = "index"
+        graph.graph["index_name"] = gdf.index.name
+    else:
+        graph.graph["id_col"] = id_col
     for this_node_idx in tqdm(
         range(len(gdf)), desc="Creating geo erdos-renyi network", disable=not verbose
     ):

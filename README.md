@@ -99,6 +99,17 @@ print(f"Number of nodes: {graph.number_of_nodes()}")
 print(f"Number of edges: {graph.number_of_edges()}")
 ```
 
+### Export to GeoDataFrames
+
+Once you have a graph, you can convert it back to GeoPandas GeoDataFrames for
+GIS workflows or file export.
+
+```python
+from pysgn import graph_to_gdf
+
+nodes_gdf, edges_gdf = graph_to_gdf(graph)
+```
+
 ## Documentation
 
 For more information on how to use PySGN, please refer to the [documentation](https://pysgn.readthedocs.io/en/stable).
