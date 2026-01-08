@@ -87,6 +87,10 @@ def _set_node_attributes(graph, gdf, id_col, node_attributes):
         node_attributes = gdf.columns.tolist()
     if isinstance(node_attributes, str):
         node_attributes = [node_attributes]
+    # Avoid storing the id column again as a node attribute when it is already
+    # being used for the node keys.
+    if id_col is not None and node_attributes:
+        node_attributes = [attr for attr in node_attributes if attr != id_col]
     if id_col is None:
         nx.set_node_attributes(
             graph,
