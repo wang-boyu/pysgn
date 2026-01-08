@@ -1,7 +1,10 @@
+import geopandas as gpd
+import networkx as nx
 import numpy as np
 import pytest
+from shapely.geometry import Point
 
-from pysgn.utils import _create_k_col
+from pysgn.utils import _create_k_col, _set_node_attributes
 
 
 def test_create_k_col_even_integer():
@@ -55,3 +58,33 @@ def test_create_k_col_reproducibility():
     assert np.array_equal(result1, result2), (
         "Results are not reproducible with the same random state"
     )
+
+
+def test_id_col_not_duplicated_as_node_attribute_when_used_as_node_key():
+    """Test that the id column is not duplicated as a node attribute when used as a node key."""
+    gdf = gpd.GeoDataFrame(
+        {
+            "id": [101, 102, 103],
+            "foo": ["a", "b", "c"],
+            "geometry": [Point(0, 0), Point(1, 1), Point(2, 2)],
+        }
+    )
+
+    graph = nx.Graph()
+    graph.add_nodes_from(gdf["id"].tolist())
+
+    _set_node_attributes(graph, gdf=gdf, id_col="id", node_attributes=True)
+
+    for node_id in gdf["id"].tolist():
+        assert node_id in graph.nodes
+
+        # id_col should NOT be stored redundantly as a node attribute
+        assert "id" not in graph.nodes[node_id]
+
+        # still store other attributes and required fields
+        assert "foo" in graph.nodes[node_id]
+        assert "geometry" in graph.nodes[node_id]
+        assert "pos" in graph.nodes[node_id]
+
+    # check an example value matches
+    assert graph.nodes[101]["foo"] == "a"
