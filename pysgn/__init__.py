@@ -12,6 +12,7 @@ from pysgn.ordering import (
     density_order_knn,
     random_order,
 )
+from pysgn.utils import graph_to_gdf
 
 __all__ = [
     "attribute_order",
@@ -21,6 +22,7 @@ __all__ = [
     "geo_barabasi_albert_network",
     "geo_erdos_renyi_network",
     "geo_watts_strogatz_network",
+    "graph_to_gdf",
     "random_order",
 ]
 

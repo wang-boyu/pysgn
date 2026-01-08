@@ -7,6 +7,7 @@ import pytest
 from shapely.geometry import Point, Polygon
 
 from pysgn.geo_erdos_renyi_network import geo_erdos_renyi_network
+from pysgn.utils import graph_to_gdf
 
 
 @pytest.fixture
@@ -183,7 +184,18 @@ def test_stores_crs_and_default_id(point_gdf: gpd.GeoDataFrame) -> None:
     g = geo_erdos_renyi_network(point_gdf, scaling_factor=1e-3)
 
     assert g.graph["crs"] == point_gdf.crs
+    assert g.graph["id_col"] is None
+
+
+def test_stores_index_name_when_index_id(point_gdf: gpd.GeoDataFrame) -> None:
+    """Graph should store index name when using index ids."""
+    named_gdf = point_gdf.copy()
+    named_gdf.index = named_gdf.index.set_names("node_id")
+
+    g = geo_erdos_renyi_network(named_gdf, id_col="index", scaling_factor=1e-3)
+
     assert g.graph["id_col"] == "index"
+    assert g.graph["index_name"] == "node_id"
 
 
 def test_stores_custom_id(point_gdf: gpd.GeoDataFrame) -> None:
@@ -201,3 +213,29 @@ def test_stores_none_crs(point_gdf: gpd.GeoDataFrame) -> None:
 
     assert "crs" in g.graph
     assert g.graph["crs"] is None
+
+
+def test_graph_to_gdf_nodes_preserve_geometry(point_gdf: gpd.GeoDataFrame) -> None:
+    """graph_to_gdf should preserve node geometry when stored."""
+    g = geo_erdos_renyi_network(point_gdf, id_col="id", scaling_factor=1e-3)
+
+    nodes_gdf, _ = graph_to_gdf(g, edges=False)
+
+    assert nodes_gdf is not None
+    assert "id" in nodes_gdf.columns
+    by_id = nodes_gdf.set_index("id")
+    for node_id, geom in zip(point_gdf["id"], point_gdf.geometry):
+        assert by_id.loc[node_id, "geometry"].equals(geom)
+
+
+def test_graph_to_gdf_nodes_use_pos_fallback(point_gdf: gpd.GeoDataFrame) -> None:
+    """graph_to_gdf should build geometry from pos when missing."""
+    g = geo_erdos_renyi_network(point_gdf, scaling_factor=1e-3, node_attributes=False)
+
+    nodes_gdf, _ = graph_to_gdf(g, edges=False)
+
+    assert nodes_gdf is not None
+    for node_id in g.nodes:
+        pos = g.nodes[node_id]["pos"]
+        geom = nodes_gdf.loc[node_id, "geometry"]
+        assert geom.coords[:] == [pos]
