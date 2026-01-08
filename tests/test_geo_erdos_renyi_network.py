@@ -176,3 +176,28 @@ def test_no_edges_created_warning(point_gdf: gpd.GeoDataFrame) -> None:
             tiny, max_degree=0, scaling_factor=1e-6, random_state=0
         )
         assert g.number_of_edges() == 0
+
+
+def test_stores_crs_and_default_id(point_gdf: gpd.GeoDataFrame) -> None:
+    """Graph should persist CRS and default id metadata."""
+    g = geo_erdos_renyi_network(point_gdf, scaling_factor=1e-3)
+
+    assert g.graph["crs"] == point_gdf.crs
+    assert g.graph["id_col"] == "index"
+
+
+def test_stores_custom_id(point_gdf: gpd.GeoDataFrame) -> None:
+    """Graph should store a custom identifier column name."""
+    g = geo_erdos_renyi_network(point_gdf, id_col="id", scaling_factor=1e-3)
+
+    assert g.graph["id_col"] == "id"
+
+
+def test_stores_none_crs(point_gdf: gpd.GeoDataFrame) -> None:
+    """Graph should explicitly record a missing CRS and warn."""
+    gdf_no_crs = point_gdf.set_crs(None, allow_override=True)
+    with pytest.warns(UserWarning):
+        g = geo_erdos_renyi_network(gdf_no_crs, scaling_factor=1e-3)
+
+    assert "crs" in g.graph
+    assert g.graph["crs"] is None

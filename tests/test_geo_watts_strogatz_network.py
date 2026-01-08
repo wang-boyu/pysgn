@@ -260,3 +260,28 @@ def test_index_as_id(point_gdf: gpd.GeoDataFrame) -> None:
     )
     with pytest.raises(ValueError, match="Multi-index is not supported"):
         geo_watts_strogatz_network(multi_gdf, k=2, p=0.1, id_col="index")
+
+
+def test_stores_crs_and_default_id(point_gdf: gpd.GeoDataFrame) -> None:
+    """Graph should persist CRS and default id metadata."""
+    g = geo_watts_strogatz_network(point_gdf, k=2, p=0.1)
+
+    assert g.graph["crs"] == point_gdf.crs
+    assert g.graph["id_col"] == "index"
+
+
+def test_stores_custom_id(point_gdf: gpd.GeoDataFrame) -> None:
+    """Graph should store a custom identifier column name."""
+    g = geo_watts_strogatz_network(point_gdf, k=2, p=0.1, id_col="id")
+
+    assert g.graph["id_col"] == "id"
+
+
+def test_stores_none_crs(point_gdf: gpd.GeoDataFrame) -> None:
+    """Graph should explicitly record a missing CRS and warn."""
+    gdf_no_crs = point_gdf.set_crs(None, allow_override=True)
+    with pytest.warns(UserWarning):
+        g = geo_watts_strogatz_network(gdf_no_crs, k=2, p=0.1)
+
+    assert "crs" in g.graph
+    assert g.graph["crs"] is None

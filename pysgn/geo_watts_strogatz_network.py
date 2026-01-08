@@ -234,6 +234,12 @@ def geo_watts_strogatz_network(
             UserWarning,
             stacklevel=2,
         )
+    if gdf.crs is None:
+        warnings.warn(
+            "Input GeoDataFrame has no CRS; storing crs=None. Downstream exports will produce GeoDataFrames with an undefined coordinate reference system.",
+            UserWarning,
+            stacklevel=2,
+        )
     if k == 0:
         raise ValueError("k must be greater than 0")
     if not 0 <= p <= 1:
@@ -258,6 +264,8 @@ def geo_watts_strogatz_network(
         raise ValueError("k must be an integer, a float, or a string")
     rewire_count = 0
     graph = nx.Graph()
+    graph.graph["crs"] = gdf.crs
+    graph.graph["id_col"] = id_col if id_col is not None else "index"
     # use centroid if geometry is a polygon
     if gdf.geometry.geom_type.iloc[0] == "Polygon":
         pos_x_array = gdf.geometry.centroid.x.values
