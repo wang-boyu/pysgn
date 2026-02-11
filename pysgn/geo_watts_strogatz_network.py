@@ -6,12 +6,16 @@ from collections.abc import Callable
 import geopandas as gpd
 import networkx as nx
 import numpy as np
-import pandas as pd
 from loguru import logger
 from sklearn.neighbors import KDTree
 from tqdm.auto import tqdm
 
-from .utils import _create_k_col, _find_scaling_factor, _set_node_attributes
+from .utils import (
+    _create_k_col,
+    _find_scaling_factor,
+    _get_id_col_array,
+    _set_node_attributes,
+)
 
 
 def _get_nearest_nodes(
@@ -234,16 +238,17 @@ def geo_watts_strogatz_network(
             UserWarning,
             stacklevel=2,
         )
+    if gdf.crs is None:
+        warnings.warn(
+            "Input GeoDataFrame has no CRS; storing crs=None. Downstream exports will produce GeoDataFrames with an undefined coordinate reference system.",
+            UserWarning,
+            stacklevel=2,
+        )
     if k == 0:
         raise ValueError("k must be greater than 0")
     if not 0 <= p <= 1:
         raise ValueError("p must be between 0 and 1")
-    if id_col is not None:
-        if id_col == "index" and isinstance(gdf.index, pd.MultiIndex):
-            raise ValueError("Multi-index is not supported")
-        id_col_array = gdf.index.values if id_col == "index" else gdf[id_col].values
-        if len(np.unique(id_col_array)) != len(id_col_array):
-            raise ValueError("ID column must contain unique values")
+    id_col_array = _get_id_col_array(gdf, id_col)
     if isinstance(k, int | float | str):
         nearest_neighbors, degree_centrality_array = _get_nearest_nodes(
             gdf,
@@ -258,6 +263,12 @@ def geo_watts_strogatz_network(
         raise ValueError("k must be an integer, a float, or a string")
     rewire_count = 0
     graph = nx.Graph()
+    graph.graph["crs"] = gdf.crs
+    if id_col == "index":
+        graph.graph["id_col"] = "index"
+        graph.graph["index_name"] = gdf.index.name
+    else:
+        graph.graph["id_col"] = id_col
     # use centroid if geometry is a polygon
     if gdf.geometry.geom_type.iloc[0] == "Polygon":
         pos_x_array = gdf.geometry.centroid.x.values

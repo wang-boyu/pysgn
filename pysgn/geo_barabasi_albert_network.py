@@ -8,7 +8,12 @@ import pandas as pd
 from loguru import logger
 from tqdm.auto import tqdm
 
-from .utils import _compute_probabilities, _find_scaling_factor, _set_node_attributes
+from .utils import (
+    _compute_probabilities,
+    _find_scaling_factor,
+    _get_id_col_array,
+    _set_node_attributes,
+)
 
 
 def geo_barabasi_albert_network(
@@ -103,6 +108,12 @@ def geo_barabasi_albert_network(
             UserWarning,
             stacklevel=2,
         )
+    if gdf.crs is None:
+        warnings.warn(
+            "Input GeoDataFrame has no CRS; storing crs=None. Downstream exports will produce GeoDataFrames with an undefined coordinate reference system.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     # Determine node addition order.
     if node_order is None:
@@ -126,18 +137,8 @@ def geo_barabasi_albert_network(
             "The node_order must return an array of indices of the same length as gdf"
         )
 
-    # Determine node IDs based on id_col if provided.
-    if id_col is not None:
-        if id_col == "index" and isinstance(gdf.index, pd.MultiIndex):
-            raise ValueError("Multi-index is not supported")
-        id_values = gdf.index.values if id_col == "index" else gdf[id_col].values
-        # Reorder IDs according to node addition order.
-        id_values = id_values[order]
-    else:
-        id_values = np.arange(len(gdf))[order]
-
-    if len(np.unique(id_values)) != len(id_values):
-        raise ValueError("ID column must contain unique values")
+    # Determine node IDs based on id_col and reorder for node addition order.
+    id_values = _get_id_col_array(gdf, id_col)[order]
 
     # Compute scaling_factor if not provided.
     if scaling_factor is None:
@@ -158,6 +159,12 @@ def geo_barabasi_albert_network(
         )
     degree_centrality_array = np.zeros(len(gdf))
     graph = nx.Graph()
+    graph.graph["crs"] = gdf.crs
+    if id_col == "index":
+        graph.graph["id_col"] = "index"
+        graph.graph["index_name"] = gdf.index.name
+    else:
+        graph.graph["id_col"] = id_col
     seed_count = m
     for i in range(seed_count):
         node_id = id_values[i]
