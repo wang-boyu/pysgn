@@ -51,6 +51,7 @@ docs = [
   "jupyterlab-lsp",
   "python-lsp-server",
   "isort",
+  "geodatasets",
 ]
 
 [project.urls]
