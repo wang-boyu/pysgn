@@ -175,9 +175,9 @@ def geo_watts_strogatz_network(
     The probability of being rewired to a new node is determined by the distance between the nodes:
 
     .. math::
-        p(\textrm{distance}|a, \textrm{min_dist}) = \textrm{min}\left(1, \left(\frac{\textrm{distance}}{\textrm{min_dist}}\right) ^ {-a}\right)
+        p(\textrm{distance}|a, \textrm{min\_dist}) = \textrm{min}\left(1, \left(\frac{\textrm{distance}}{\textrm{min\_dist}}\right) ^ {-a}\right)
 
-    where min_dist is the minimum distance between nodes, and a is the distance decay exponent parameter, default is 3.
+    where :math:`min\_dist` is the minimum distance between nodes, and :math:`a` is the distance decay exponent parameter, default is 3.
     The minimum distance is a threshold, below which nodes are connected with probability 1, if an edge is chosen to be rewired.
     It is 1/20 of the bounding box diagonal by default. Users can set the scaling factor directly if needed, which is the inverse of the minimum distance.
 
