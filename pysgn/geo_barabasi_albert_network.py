@@ -38,10 +38,10 @@ def geo_barabasi_albert_network(
     a geospatial decay function based on the distance between the nodes:
 
     .. math::
-        p_i(\textrm{distance}|a, \textrm{min_dist}) \propto k_i \cdot \textrm{min}\left(1, \left(\frac{\textrm{distance}}{\textrm{min_dist}}\right) ^ {-a}\right)
+        p_i(\textrm{distance}|a, \textrm{min\_dist}) \propto k_i \cdot \textrm{min}\left(1, \left(\frac{\textrm{distance}}{\textrm{min\_dist}}\right) ^ {-a}\right)
 
-    where :math:`k_i` is the degree of existing node i, min_dist is the minimum distance between nodes,
-    and a is the distance decay exponent parameter, default is 3. The minimum distance is a threshold,
+    where :math:`k_i` is the degree of existing node :math:`i`, :math:`min\_dist` is the minimum distance between nodes,
+    and :math:`a` is the distance decay exponent parameter, default is 3. The minimum distance is a threshold,
     below which nodes are connected with probability 1, if an edge is chosen to be rewired. It is 1/20
     of the bounding box diagonal by default. Users can set the scaling factor directly if needed, which
     is the inverse of the minimum distance.
