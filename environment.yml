@@ -1,0 +1,17 @@
+name: pysgn
+channels:
+  - conda-forge
+channel_priority: strict
+dependencies:
+  - python>=3.10
+  - numpy
+  - pandas
+  - geopandas
+  - networkx
+  - scikit-learn
+  - scipy
+  - loguru
+  - tqdm
+  - pip
+  - pip:
+    - -e .
