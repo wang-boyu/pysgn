@@ -12,7 +12,7 @@ from pysgn.ordering import (
     density_order_knn,
     random_order,
 )
-from pysgn.utils import graph_to_gdf
+from pysgn.utils import graph_to_gdf, sample_points
 
 __all__ = [
     "attribute_order",
@@ -24,6 +24,7 @@ __all__ = [
     "geo_watts_strogatz_network",
     "graph_to_gdf",
     "random_order",
+    "sample_points",
 ]
 
 __title__ = "pysgn"

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Callable, Sequence
+from numbers import Real
 from typing import Any
 
 import geopandas as gpd
@@ -8,8 +10,213 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 from loguru import logger
-from shapely.geometry import LineString, Point
+from pyproj import CRS
+from shapely.geometry import LineString, MultiPolygon, Point, Polygon
 from shapely.geometry.base import BaseGeometry
+
+
+def sample_points(
+    n: int,
+    *,
+    bbox: Sequence[float] | None = None,
+    polygon: Polygon | MultiPolygon | None = None,
+    sampler: Callable[[np.random.Generator, int], np.ndarray] | None = None,
+    random_state: int | None = None,
+    crs: Any | None = None,
+    max_attempts: int = 1_000_000,
+) -> gpd.GeoDataFrame:
+    """Sample point geometries within a spatial domain.
+
+    Returns a geometry-only ``GeoDataFrame`` with exactly ``n`` point
+    geometries in the ``geometry`` column.
+
+    Domain definition:
+
+    - ``bbox`` only: sample in ``(xmin, ymin, xmax, ymax)`` bounds.
+    - ``polygon`` only: sample in polygon area.
+    - both: sample in ``polygon.intersection(bbox_polygon)``.
+    - at least one of ``bbox`` or ``polygon`` must be provided.
+
+    Sampling:
+
+    - ``sampler is None``: uniform candidate generation over the final domain.
+    - ``sampler is callable``: user-defined candidate generation with
+      ``sampler(rng, k) -> array-like`` of shape ``(k, 2)``, followed by
+      rejection against the final domain.
+
+    CRS handling:
+
+    - CRS is set only from explicit ``crs`` input with ``pyproj.CRS.from_user_input``.
+
+    Args:
+        n: Number of points to generate; must be > 0.
+        bbox: Bounding box sequence ``(xmin, ymin, xmax, ymax)``.
+        polygon: Domain polygon geometry (``Polygon`` or ``MultiPolygon`` only).
+        sampler: Optional callable producing candidate coordinates.
+        random_state: Random seed for deterministic output.
+        crs: Optional CRS user input passed through
+            ``pyproj.CRS.from_user_input`` before assignment.
+        max_attempts: Maximum number of evaluated candidate points.
+
+    Returns:
+        A geometry-only ``geopandas.GeoDataFrame`` with ``n`` sampled points.
+
+    Raises:
+        ValueError: For invalid inputs (for example ``n <= 0``, invalid
+            ``bbox``/``polygon``, missing domain, invalid ``sampler``,
+            ``max_attempts <= 0``, or non-positive final domain area).
+        RuntimeError: If sampling cannot produce ``n`` accepted points within
+            ``max_attempts`` evaluated candidate points.
+    """
+    if not isinstance(n, (int, np.integer)) or n <= 0:
+        raise ValueError("n must be a positive integer.")
+
+    if not isinstance(max_attempts, (int, np.integer)) or max_attempts <= 0:
+        raise ValueError("max_attempts must be a positive integer.")
+
+    if sampler is not None and not callable(sampler):
+        raise ValueError("sampler must be callable or None.")
+
+    final_domain = _resolve_sampling_domain(bbox=bbox, polygon=polygon)
+    rng = np.random.default_rng(seed=random_state)
+    parsed_crs = CRS.from_user_input(crs) if crs is not None else None
+
+    accepted_coords: list[tuple[float, float]] = []
+    attempts = 0
+
+    while len(accepted_coords) < n and attempts < max_attempts:
+        remaining_points = n - len(accepted_coords)
+        remaining_attempts = max_attempts - attempts
+        batch_size = max(1, min(4096, remaining_points, remaining_attempts))
+
+        candidates = _candidate_batch(
+            rng=rng,
+            final_domain=final_domain,
+            sampler=sampler,
+            k=batch_size,
+        )
+        attempts += batch_size
+
+        for x, y in candidates:
+            point = Point(float(x), float(y))
+            if final_domain.covers(point):
+                accepted_coords.append((float(x), float(y)))
+                if len(accepted_coords) == n:
+                    break
+
+    if len(accepted_coords) < n:
+        raise RuntimeError(
+            "Unable to sample the requested number of points within max_attempts; "
+            "try increasing max_attempts or adjusting the domain/sampler."
+        )
+
+    accepted_array = np.asarray(accepted_coords, dtype=float)
+    geometry = gpd.points_from_xy(accepted_array[:, 0], accepted_array[:, 1])
+    return gpd.GeoDataFrame(geometry=geometry, crs=parsed_crs)
+
+
+def _bbox_to_polygon(bbox: Sequence[float]) -> Polygon:
+    """Validate bbox and return a rectangle polygon."""
+    try:
+        bbox_values = list(bbox)
+    except TypeError as exc:
+        raise ValueError(
+            "bbox must be a sequence of 4 values: (xmin, ymin, xmax, ymax)."
+        ) from exc
+
+    if len(bbox_values) != 4:
+        raise ValueError(
+            "bbox must be a sequence of 4 values: (xmin, ymin, xmax, ymax)."
+        )
+
+    validated: list[float] = []
+    for idx, value in enumerate(bbox_values):
+        if not isinstance(value, Real):
+            raise ValueError(
+                f"bbox values must be numeric; got {type(value).__name__} at index {idx}."
+            )
+        value_f = float(value)
+        if not np.isfinite(value_f):
+            raise ValueError(f"bbox values must be finite; got {value} at index {idx}.")
+        validated.append(value_f)
+
+    xmin, ymin, xmax, ymax = validated
+    if xmin >= xmax or ymin >= ymax:
+        raise ValueError("bbox ordering must satisfy xmin < xmax and ymin < ymax.")
+
+    return Polygon(
+        [(xmin, ymin), (xmax, ymin), (xmax, ymax), (xmin, ymax), (xmin, ymin)]
+    )
+
+
+def _validate_polygon(polygon: Polygon | MultiPolygon) -> Polygon | MultiPolygon:
+    """Validate polygon input for node synthesis domain construction."""
+    if not isinstance(polygon, (Polygon, MultiPolygon)):
+        raise ValueError("polygon must be a shapely Polygon or MultiPolygon.")
+    if polygon.is_empty:
+        raise ValueError("polygon must be non-empty.")
+    return polygon
+
+
+def _resolve_sampling_domain(
+    *,
+    bbox: Sequence[float] | None,
+    polygon: Polygon | MultiPolygon | None,
+) -> BaseGeometry:
+    """Resolve bbox/polygon inputs into a validated final sampling domain."""
+    bbox_polygon: Polygon | None = _bbox_to_polygon(bbox) if bbox is not None else None
+    validated_polygon: Polygon | MultiPolygon | None = (
+        _validate_polygon(polygon) if polygon is not None else None
+    )
+
+    if bbox_polygon is None and validated_polygon is None:
+        raise ValueError("At least one of bbox or polygon must be provided.")
+
+    if bbox_polygon is not None and validated_polygon is not None:
+        final_domain = validated_polygon.intersection(bbox_polygon)
+    else:
+        final_domain = bbox_polygon if bbox_polygon is not None else validated_polygon
+
+    if final_domain is None or final_domain.area <= 0:
+        raise ValueError(
+            "Final sampling domain must have positive area; check bbox/polygon overlap."
+        )
+    return final_domain
+
+
+def _validate_sampler_output(candidates: Any, k: int) -> np.ndarray:
+    """Validate sampler output against the strict Phase 1 contract."""
+    candidate_array = np.asarray(candidates)
+    if not np.issubdtype(candidate_array.dtype, np.number):
+        raise ValueError("sampler output must be numeric array-like with shape (k, 2).")
+
+    if candidate_array.ndim != 2 or candidate_array.shape != (k, 2):
+        raise ValueError(
+            f"sampler output must have exact shape ({k}, 2); got {candidate_array.shape}."
+        )
+
+    candidate_array = candidate_array.astype(float, copy=False)
+    if not np.isfinite(candidate_array).all():
+        raise ValueError("sampler output must contain only finite values.")
+    return candidate_array
+
+
+def _candidate_batch(
+    *,
+    rng: np.random.Generator,
+    final_domain: BaseGeometry,
+    sampler: Callable[[np.random.Generator, int], np.ndarray] | None,
+    k: int,
+) -> np.ndarray:
+    """Generate one candidate batch via uniform or custom sampler mode."""
+    if sampler is None:
+        xmin, ymin, xmax, ymax = final_domain.bounds
+        x = rng.uniform(low=xmin, high=xmax, size=k)
+        y = rng.uniform(low=ymin, high=ymax, size=k)
+        return np.column_stack((x, y))
+    if not callable(sampler):
+        raise ValueError("sampler must be callable or None.")
+    return _validate_sampler_output(sampler(rng, k), k=k)
 
 
 def _compute_probabilities(
