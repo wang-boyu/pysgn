@@ -368,10 +368,12 @@ def graph_to_gdf(
     This function reconstructs node and edge GeoDataFrames from a graph that
     stores geospatial attributes. Node geometry is taken from the stored
     geometry attribute when available, otherwise it falls back to a Point
-    created from the ``pos`` coordinates. Edge geometry uses a stored shapely
-    geometry when present; otherwise it is built as a straight LineString
-    between endpoint positions or centroids. CRS metadata is read from
-    ``graph.graph["crs"]`` and applied to outputs when present.
+    created from the ``pos`` coordinates. The internal ``pos`` attribute is
+    used for reconstruction but is omitted from exported node columns. Edge
+    geometry uses a stored shapely geometry when present; otherwise it is built
+    as a straight LineString between endpoint positions or centroids. CRS
+    metadata is read from ``graph.graph["crs"]`` and applied to outputs when
+    present.
 
     Args:
         graph: Graph containing geospatial node/edge attributes.
@@ -410,6 +412,9 @@ def graph_to_gdf(
         node_ids: list[Any] = []
         for node_id, attrs in graph.nodes(data=True):
             record = dict(attrs)
+            # "pos" is an internal coordinate cache used for reconstruction.
+            # Avoid exporting it when explicit geometry is provided separately.
+            record.pop("pos", None)
             geometry = _node_geometry_from_attrs(node_id, attrs)
             record["geometry"] = geometry
             node_records.append(record)

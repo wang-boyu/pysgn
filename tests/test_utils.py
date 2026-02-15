@@ -591,7 +591,8 @@ def test_graph_to_gdf_nodes_positional_index_without_extra_fields():
     assert nodes_gdf.index.name is None
     assert "node" not in nodes_gdf.columns
     assert "id" not in nodes_gdf.columns
-    assert nodes_gdf.columns.tolist() == ["pos", "geometry"]
+    assert "pos" not in nodes_gdf.columns
+    assert nodes_gdf.columns.tolist() == ["geometry"]
 
 
 def test_set_node_attributes_with_positional_ids():
