@@ -153,6 +153,9 @@ hidden: true
 ---
 Introduction <self>
 Getting Started <getting_started>
+Network Models: WS + BA <network_models_ws_ba>
+Utilities <utils>
+Advanced Options and Performance <advanced_options_performance>
 API Documentation <apis/api_main>
 ```
 
