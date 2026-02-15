@@ -1,17 +1,22 @@
 import re
+from functools import partial
 
 import geopandas as gpd
 import networkx as nx
 import numpy as np
 import pandas as pd
 import pytest
-from shapely.geometry import LineString, Point, Polygon
+from shapely.geometry import LineString, MultiPolygon, Point, Polygon
 
 from pysgn.utils import (
+    _bbox_to_polygon,
     _create_k_col,
     _get_id_col_array,
+    _resolve_sampling_domain,
     _set_node_attributes,
+    _validate_polygon,
     graph_to_gdf,
+    sample_points,
 )
 
 
@@ -66,6 +71,358 @@ def test_create_k_col_reproducibility():
     assert np.array_equal(result1, result2), (
         "Results are not reproducible with the same random state"
     )
+
+
+def test_bbox_to_polygon_valid_bbox_returns_rectangle():
+    """_bbox_to_polygon should return a rectangle with expected bounds."""
+    poly = _bbox_to_polygon((0, 1, 3, 5))
+
+    assert isinstance(poly, Polygon)
+    assert poly.bounds == (0.0, 1.0, 3.0, 5.0)
+    assert poly.area == 12.0
+
+
+def test_bbox_to_polygon_accepts_numeric_sequence_types():
+    """_bbox_to_polygon should accept mixed real numeric sequence inputs."""
+    poly = _bbox_to_polygon(np.array([0, 0.5, 2, 1.5]))
+
+    assert poly.bounds == (0.0, 0.5, 2.0, 1.5)
+
+
+@pytest.mark.parametrize("bbox", [None, 5, object()])
+def test_bbox_to_polygon_rejects_non_sequence_input(bbox):
+    """_bbox_to_polygon should reject non-sequence bbox values."""
+    with pytest.raises(
+        ValueError,
+        match="bbox must be a sequence of 4 values",
+    ):
+        _bbox_to_polygon(bbox)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("bbox", [(0, 1, 2), (0, 1, 2, 3, 4)])
+def test_bbox_to_polygon_rejects_wrong_length(bbox):
+    """_bbox_to_polygon should reject bbox with incorrect length."""
+    with pytest.raises(
+        ValueError,
+        match="bbox must be a sequence of 4 values",
+    ):
+        _bbox_to_polygon(bbox)
+
+
+def test_bbox_to_polygon_rejects_non_numeric_values():
+    """_bbox_to_polygon should reject non-numeric bbox entries."""
+    with pytest.raises(ValueError, match="bbox values must be numeric"):
+        _bbox_to_polygon((0, "x", 2, 3))  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("bad_value", [np.nan, np.inf, -np.inf])
+def test_bbox_to_polygon_rejects_non_finite_values(bad_value):
+    """_bbox_to_polygon should reject NaN/Inf values."""
+    with pytest.raises(ValueError, match="bbox values must be finite"):
+        _bbox_to_polygon((0, 1, bad_value, 4))
+
+
+@pytest.mark.parametrize(
+    "bbox", [(0, 0, 0, 1), (0, 2, 1, 2), (2, 0, 1, 1), (0, 3, 1, 2)]
+)
+def test_bbox_to_polygon_rejects_invalid_ordering(bbox):
+    """_bbox_to_polygon should enforce xmin<xmax and ymin<ymax."""
+    with pytest.raises(
+        ValueError,
+        match="bbox ordering must satisfy xmin < xmax and ymin < ymax",
+    ):
+        _bbox_to_polygon(bbox)
+
+
+def test_validate_polygon_accepts_polygon_and_multipolygon():
+    """_validate_polygon should pass through valid polygonal inputs."""
+    polygon = Polygon([(0, 0), (2, 0), (2, 2), (0, 2)])
+    multipolygon = MultiPolygon(
+        [
+            Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+            Polygon([(2, 2), (3, 2), (3, 3), (2, 3)]),
+        ]
+    )
+
+    assert _validate_polygon(polygon) is polygon
+    assert _validate_polygon(multipolygon) is multipolygon
+
+
+@pytest.mark.parametrize("bad_polygon", [Point(0, 0), "not-a-geometry", None, 123])
+def test_validate_polygon_rejects_non_polygon_types(bad_polygon):
+    """_validate_polygon should reject non-polygon geometry types."""
+    with pytest.raises(
+        ValueError, match="polygon must be a shapely Polygon or MultiPolygon"
+    ):
+        _validate_polygon(bad_polygon)  # type: ignore[arg-type]
+
+
+def test_validate_polygon_rejects_empty_polygon():
+    """_validate_polygon should reject empty polygon geometries."""
+    with pytest.raises(ValueError, match="polygon must be non-empty"):
+        _validate_polygon(Polygon())
+
+
+def test_resolve_sampling_domain_bbox_only():
+    """_resolve_sampling_domain should return bbox polygon when only bbox is provided."""
+    domain = _resolve_sampling_domain(bbox=(0, 0, 2, 4), polygon=None)
+
+    assert isinstance(domain, Polygon)
+    assert domain.bounds == (0.0, 0.0, 2.0, 4.0)
+    assert domain.area == 8.0
+
+
+def test_resolve_sampling_domain_polygon_only():
+    """_resolve_sampling_domain should return polygon when only polygon is provided."""
+    polygon = Polygon([(0, 0), (3, 0), (3, 2), (0, 2)])
+    domain = _resolve_sampling_domain(bbox=None, polygon=polygon)
+
+    assert isinstance(domain, Polygon)
+    assert domain.equals(polygon)
+    assert domain.area == 6.0
+
+
+def test_resolve_sampling_domain_intersection_when_both_provided():
+    """_resolve_sampling_domain should use intersection of bbox and polygon."""
+    polygon = Polygon([(0, 0), (4, 0), (4, 4), (0, 4)])
+    domain = _resolve_sampling_domain(bbox=(1, 1, 3, 5), polygon=polygon)
+
+    assert domain.bounds == (1.0, 1.0, 3.0, 4.0)
+    assert domain.area == 6.0
+    assert domain.covers(Point(2, 2))
+    assert not domain.covers(Point(0.5, 2))
+
+
+def test_resolve_sampling_domain_requires_bbox_or_polygon():
+    """_resolve_sampling_domain should fail when both inputs are missing."""
+    with pytest.raises(
+        ValueError, match="At least one of bbox or polygon must be provided"
+    ):
+        _resolve_sampling_domain(bbox=None, polygon=None)
+
+
+def test_resolve_sampling_domain_rejects_empty_intersection():
+    """_resolve_sampling_domain should fail when intersection has no positive area."""
+    polygon = Polygon([(10, 10), (11, 10), (11, 11), (10, 11)])
+    with pytest.raises(
+        ValueError, match="Final sampling domain must have positive area"
+    ):
+        _resolve_sampling_domain(bbox=(0, 0, 1, 1), polygon=polygon)
+
+
+def test_resolve_sampling_domain_rejects_zero_area_polygon_domain():
+    """_resolve_sampling_domain should fail for polygon domains with zero area."""
+    zero_area_polygon = Polygon([(0, 0), (1, 1), (2, 2), (0, 0)])
+    with pytest.raises(
+        ValueError, match="Final sampling domain must have positive area"
+    ):
+        _resolve_sampling_domain(bbox=None, polygon=zero_area_polygon)
+
+
+def test_resolve_sampling_domain_propagates_bbox_validation_errors():
+    """_resolve_sampling_domain should surface bbox validation errors."""
+    with pytest.raises(
+        ValueError, match="bbox ordering must satisfy xmin < xmax and ymin < ymax"
+    ):
+        _resolve_sampling_domain(bbox=(2, 0, 1, 1), polygon=None)
+
+
+def test_resolve_sampling_domain_propagates_polygon_validation_errors():
+    """_resolve_sampling_domain should surface polygon validation errors."""
+    with pytest.raises(
+        ValueError, match="polygon must be a shapely Polygon or MultiPolygon"
+    ):
+        _resolve_sampling_domain(bbox=None, polygon=Point(0, 0))  # type: ignore[arg-type]
+
+
+def test_sample_points_returns_geodataframe_with_points():
+    """sample_points should return geometry-only Point GeoDataFrame with n rows."""
+    gdf = sample_points(n=20, bbox=(0, 0, 2, 1), random_state=42)
+
+    assert isinstance(gdf, gpd.GeoDataFrame)
+    assert len(gdf) == 20
+    assert gdf.columns.tolist() == ["geometry"]
+    assert gdf.geometry.geom_type.eq("Point").all()
+
+
+def test_sample_points_bbox_only_points_within_bbox():
+    """sample_points should keep all bbox-only points inside bbox domain."""
+    bbox = (10, -2, 12, 1)
+    gdf = sample_points(n=30, bbox=bbox, random_state=7)
+    bbox_polygon = _bbox_to_polygon(bbox)
+
+    assert all(bbox_polygon.covers(point) for point in gdf.geometry)
+
+
+def test_sample_points_polygon_only_excludes_hole_interiors():
+    """sample_points should accept polygon covers and exclude hole interiors."""
+    hole_ring = [(2, 2), (3, 2), (3, 3), (2, 3), (2, 2)]
+    polygon = Polygon(
+        [(0, 0), (5, 0), (5, 5), (0, 5), (0, 0)],
+        holes=[hole_ring],
+    )
+    hole_polygon = Polygon(hole_ring)
+    gdf = sample_points(n=40, polygon=polygon, random_state=8, max_attempts=50_000)
+
+    assert all(polygon.covers(point) for point in gdf.geometry)
+    assert not any(hole_polygon.contains(point) for point in gdf.geometry)
+
+
+def test_sample_points_bbox_and_polygon_uses_intersection_domain():
+    """sample_points should restrict output to bbox/polygon intersection."""
+    polygon = Polygon([(0, 0), (4, 0), (4, 4), (0, 4)])
+    bbox = (2, 1, 6, 3)
+    intersection = polygon.intersection(_bbox_to_polygon(bbox))
+    gdf = sample_points(n=30, bbox=bbox, polygon=polygon, random_state=21)
+
+    assert all(intersection.covers(point) for point in gdf.geometry)
+
+
+def test_sample_points_reproducible_with_same_random_state():
+    """sample_points should be deterministic for fixed random_state."""
+    gdf_a = sample_points(n=25, bbox=(0, 0, 1, 1), random_state=1234)
+    gdf_b = sample_points(n=25, bbox=(0, 0, 1, 1), random_state=1234)
+
+    coords_a = np.column_stack((gdf_a.geometry.x.values, gdf_a.geometry.y.values))
+    coords_b = np.column_stack((gdf_b.geometry.x.values, gdf_b.geometry.y.values))
+    assert np.array_equal(coords_a, coords_b)
+
+
+def test_sample_points_uniform_mode_with_explicit_none_sampler():
+    """sample_points should support explicit sampler=None path."""
+    gdf = sample_points(n=15, bbox=(0, 0, 2, 2), sampler=None, random_state=9)
+
+    assert len(gdf) == 15
+    assert gdf.geometry.geom_type.eq("Point").all()
+
+
+def _mvn_sampler(rng: np.random.Generator, k: int, mean, cov) -> np.ndarray:
+    """Parameterized multivariate normal sampler used for tests."""
+    return rng.multivariate_normal(mean=mean, cov=cov, size=k)
+
+
+def test_sample_points_accepts_parameterized_sampler_and_filters_domain():
+    """sample_points should accept custom sampler and enforce final domain."""
+    sampler = partial(
+        _mvn_sampler,
+        mean=np.array([0.4, 0.4]),
+        cov=np.array([[0.2, 0.0], [0.0, 0.2]]),
+    )
+    bbox = (0, 0, 1, 1)
+    bbox_polygon = _bbox_to_polygon(bbox)
+    gdf = sample_points(
+        n=25,
+        bbox=bbox,
+        sampler=sampler,
+        random_state=11,
+        max_attempts=50_000,
+    )
+
+    assert len(gdf) == 25
+    assert all(bbox_polygon.covers(point) for point in gdf.geometry)
+
+
+@pytest.mark.parametrize("n", [0, -1, 1.5, "10"])
+def test_sample_points_invalid_n(n):
+    """sample_points should reject non-positive/non-integer n."""
+    with pytest.raises(ValueError, match="n must be a positive integer"):
+        sample_points(n=n, bbox=(0, 0, 1, 1), random_state=1)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("bbox", [(0, 0, 1), (2, 0, 1, 1), (0, 0, np.nan, 1)])
+def test_sample_points_invalid_bbox_inputs(bbox):
+    """sample_points should reject malformed bbox values."""
+    with pytest.raises(ValueError):
+        sample_points(n=5, bbox=bbox, random_state=1)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("polygon", [Point(0, 0), Polygon()])
+def test_sample_points_invalid_or_empty_polygon(polygon):
+    """sample_points should reject invalid polygon inputs."""
+    with pytest.raises(ValueError):
+        sample_points(n=5, polygon=polygon, random_state=1)  # type: ignore[arg-type]
+
+
+def test_sample_points_requires_bbox_or_polygon():
+    """sample_points should fail when no domain inputs are provided."""
+    with pytest.raises(
+        ValueError, match="At least one of bbox or polygon must be provided"
+    ):
+        sample_points(n=5, random_state=1)
+
+
+def test_sample_points_rejects_empty_intersection():
+    """sample_points should reject empty intersection final domains."""
+    polygon = Polygon([(10, 10), (11, 10), (11, 11), (10, 11)])
+    with pytest.raises(
+        ValueError, match="Final sampling domain must have positive area"
+    ):
+        sample_points(n=5, bbox=(0, 0, 1, 1), polygon=polygon, random_state=1)
+
+
+def test_sample_points_rejects_non_callable_sampler():
+    """sample_points should reject non-callable sampler values."""
+    with pytest.raises(ValueError, match="sampler must be callable or None"):
+        sample_points(n=5, bbox=(0, 0, 1, 1), sampler=123, random_state=1)  # type: ignore[arg-type]
+
+
+def test_sample_points_rejects_sampler_output_wrong_shape():
+    """sample_points should reject sampler outputs with invalid shape."""
+
+    def bad_sampler(rng: np.random.Generator, k: int) -> np.ndarray:
+        return np.zeros((k, 3))
+
+    with pytest.raises(ValueError, match="sampler output must have exact shape"):
+        sample_points(n=5, bbox=(0, 0, 1, 1), sampler=bad_sampler, random_state=1)
+
+
+def test_sample_points_rejects_sampler_output_non_numeric():
+    """sample_points should reject non-numeric sampler outputs."""
+
+    def bad_sampler(rng: np.random.Generator, k: int):
+        return [["x", "y"]] * k
+
+    with pytest.raises(ValueError, match="sampler output must be numeric array-like"):
+        sample_points(n=5, bbox=(0, 0, 1, 1), sampler=bad_sampler, random_state=1)
+
+
+def test_sample_points_rejects_sampler_output_non_finite():
+    """sample_points should reject sampler outputs containing NaN/Inf."""
+
+    def bad_sampler(rng: np.random.Generator, k: int) -> np.ndarray:
+        out = np.zeros((k, 2), dtype=float)
+        out[0, 0] = np.nan
+        return out
+
+    with pytest.raises(
+        ValueError, match="sampler output must contain only finite values"
+    ):
+        sample_points(n=5, bbox=(0, 0, 1, 1), sampler=bad_sampler, random_state=1)
+
+
+@pytest.mark.parametrize("max_attempts", [0, -1])
+def test_sample_points_invalid_max_attempts(max_attempts):
+    """sample_points should reject non-positive max_attempts."""
+    with pytest.raises(ValueError, match="max_attempts must be a positive integer"):
+        sample_points(n=5, bbox=(0, 0, 1, 1), random_state=1, max_attempts=max_attempts)
+
+
+def test_sample_points_runtime_exhaustion_path():
+    """sample_points should raise RuntimeError when attempts are exhausted."""
+
+    def always_outside_sampler(rng: np.random.Generator, k: int) -> np.ndarray:
+        return np.full((k, 2), 10.0)
+
+    with pytest.raises(
+        RuntimeError, match="Unable to sample the requested number of points"
+    ):
+        sample_points(
+            n=5,
+            bbox=(0, 0, 1, 1),
+            sampler=always_outside_sampler,
+            random_state=1,
+            max_attempts=5,
+        )
 
 
 def test_get_id_col_array_defaults_to_positional_index():
