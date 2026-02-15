@@ -9,7 +9,7 @@ PySGN (**Py**thon for **S**ynthetic **G**eospatial **N**etworks) is a Python pac
 
 ## Installation
 
-PySGN can be installed using pip:
+PySGN can be installed using `pip`:
 
 ```bash
 pip install pysgn
@@ -21,11 +21,37 @@ If you plan to run the code snippets below or the Getting Started notebook `docs
 pip install "pysgn[docs]"
 ```
 
-When working from a clone of this repository, you can install the same extras in editable mode:
+Alternatively, PySGN is available on `conda-forge` and can be installed with:
 
 ```bash
-pip install -e ".[docs]"
+conda install -c conda-forge pysgn
 ```
+
+To work from source, you may clone this repository:
+
+```bash
+git clone https://github.com/wang-boyu/pysgn.git
+cd pysgn
+```
+
+then either:
+
+- using `pip` in editable mode
+
+   ```bash
+   pip install -e .
+   # or with extras
+   pip install -e ".[docs]"
+   ```
+
+- using `conda` with the provided `environment.yml`.
+
+   ```bash
+   conda env create -f environment.yml
+   conda activate pysgn
+   ```
+
+   This installs PySGN in editable mode (`pip install -e .`), so no additional installation step is required.
 
 ## Usage Example
 
@@ -153,6 +179,7 @@ hidden: true
 ---
 Introduction <self>
 Getting Started <getting_started>
+Utility Functions <utilities>
 API Documentation <apis/api_main>
 ```
 
