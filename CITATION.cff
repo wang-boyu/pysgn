@@ -1,0 +1,50 @@
+cff-version: "1.2.0"
+authors:
+- family-names: Wang
+  given-names: Boyu
+  orcid: "https://orcid.org/0000-0001-9879-2138"
+- family-names: Crooks
+  given-names: Andrew
+  orcid: "https://orcid.org/0000-0002-5034-6654"
+- family-names: Anderson
+  given-names: Taylor
+  orcid: "https://orcid.org/0000-0003-1145-0608"
+- family-names: Züfle
+  given-names: Andreas
+  orcid: "https://orcid.org/0000-0001-7001-4123"
+contact:
+- family-names: Wang
+  given-names: Boyu
+  orcid: "https://orcid.org/0000-0001-9879-2138"
+doi: 10.5281/zenodo.18883898
+message: If you use this software, please cite our article in the
+  Journal of Open Source Software.
+preferred-citation:
+  authors:
+  - family-names: Wang
+    given-names: Boyu
+    orcid: "https://orcid.org/0000-0001-9879-2138"
+  - family-names: Crooks
+    given-names: Andrew
+    orcid: "https://orcid.org/0000-0002-5034-6654"
+  - family-names: Anderson
+    given-names: Taylor
+    orcid: "https://orcid.org/0000-0003-1145-0608"
+  - family-names: Züfle
+    given-names: Andreas
+    orcid: "https://orcid.org/0000-0001-7001-4123"
+  date-published: 2026-03-15
+  doi: 10.21105/joss.09346
+  issn: 2475-9066
+  issue: 119
+  journal: Journal of Open Source Software
+  publisher:
+    name: Open Journals
+  start: 9346
+  title: "PySGN: A Python package for constructing synthetic geospatial
+    networks"
+  type: article
+  url: "https://joss.theoj.org/papers/10.21105/joss.09346"
+  volume: 11
+title: "PySGN: A Python package for constructing synthetic geospatial
+  networks"
